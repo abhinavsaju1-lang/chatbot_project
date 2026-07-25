@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}MindSense-AI | Session History{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8 w-full space-y-6">
+    
+    <div class="flex items-center justify-between bg-slate-900/80 border border-slate-800 p-6 rounded-2xl backdrop-blur-xl">
+        <div>
+            <h1 class="font-outfit font-extrabold text-2xl text-white">Counseling Session History</h1>
+            <p class="text-sm text-slate-400 mt-1">Past chat interactions and emotion analysis logs for {{ user_name }}.</p>
+        </div>
+        <a href="/chat" class="px-4 py-2 bg-gradient-to-r from-teal-500 to-indigo-600 hover:from-teal-400 hover:to-indigo-500 text-white font-semibold text-sm rounded-xl shadow-lg transition">
+            New Session
+        </a>
+    </div>
+
+    <!-- History List -->
+    <div class="space-y-4">
+        {% if history and history|length > 0 %}
+            {% for item in history %}
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 space-y-3 backdrop-blur-xl shadow-lg">
+                <div class="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-3">
+                    <span class="font-semibold text-slate-300"><i class="fa-solid fa-calendar-day text-teal-400 mr-2"></i> {{ item.timestamp }}</span>
+                    <span class="px-3 py-1 bg-teal-500/10 text-teal-300 border border-teal-500/20 font-semibold rounded-full">
+                        Mood: {{ item.emotion }}
+                    </span>
+                </div>
+                <div class="space-y-2">
+                    <div class="text-sm">
+                        <span class="font-bold text-indigo-400">User:</span>
+                        <p class="text-slate-200 mt-0.5">{{ item.user }}</p>
+                    </div>
+                    <div class="text-sm bg-slate-950/60 p-4 rounded-xl border border-slate-800/80">
+                        <span class="font-bold text-teal-400">MindSense AI Counselor:</span>
+                        <p class="text-slate-300 mt-1 leading-relaxed">{{ item.bot }}</p>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
+                <i class="fa-solid fa-comments text-4xl text-slate-600 mb-3"></i>
+                <p class="text-lg font-semibold text-slate-300">No session history yet.</p>
+                <p class="text-sm text-slate-500 mt-1 mb-6">Start a counseling conversation to record emotion logs and reports.</p>
+                <a href="/chat" class="px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-xl transition">
+                    Start Counseling Chat
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

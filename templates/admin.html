@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}MindSense-AI | Admin Control Panel & High-Risk Monitoring{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 w-full space-y-8">
+    
+    <!-- Admin Header -->
+    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 sm:p-8 rounded-2xl backdrop-blur-xl shadow-xl transition-colors">
+        <div>
+            <h1 class="font-outfit font-extrabold text-2xl sm:text-3xl text-slate-800 dark:text-white flex items-center gap-3">
+                <span>Administrative Control Panel</span>
+                <span class="px-3 py-1 bg-rose-500/10 text-rose-500 text-xs font-bold rounded-full border border-rose-500/20">High-Risk Monitoring Active</span>
+            </h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage registered users, inspect generated clinical reports, and monitor high-risk stress alerts.</p>
+        </div>
+
+        <!-- Search Bar & Export CSV Action -->
+        <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            <form method="GET" action="/admin" class="flex items-center gap-2">
+                <input type="text" name="search" value="{{ search_query or '' }}" placeholder="Search user name or email..." class="px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:border-teal-500 w-full md:w-64 transition">
+                <button type="submit" class="px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs rounded-xl shadow-md transition">
+                    Search
+                </button>
+            </form>
+            <a href="/admin/export-csv" class="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-2">
+                <i class="fa-solid fa-file-csv"></i> Export CSV
+            </a>
+        </div>
+    </div>
+
+    <!-- High-Risk User Monitoring Card -->
+    <div class="bg-gradient-to-r from-rose-500/10 via-amber-500/5 to-transparent border border-rose-500/30 p-6 rounded-2xl shadow-lg space-y-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-rose-500 text-white flex items-center justify-center text-lg font-bold shadow-md shadow-rose-500/20">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <div>
+                    <h2 class="font-outfit font-extrabold text-lg text-slate-800 dark:text-white">High-Risk Stress & Intervention Monitoring</h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Users exhibiting elevated stress scores (>= 70) requiring counselor review.</p>
+                </div>
+            </div>
+            <span class="px-3 py-1 bg-rose-500 text-white font-bold text-xs rounded-full">
+                {{ high_risk_users | length }} Alert{% if high_risk_users | length != 1 %}s{% endif %}
+            </span>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+                <thead class="bg-slate-100 dark:bg-slate-950 text-slate-400 uppercase tracking-wider font-bold">
+                    <tr>
+                        <th class="p-3">Patient Name</th>
+                        <th class="p-3">Email Address</th>
+                        <th class="p-3">Stress Score</th>
+                        <th class="p-3">Risk Assessment</th>
+                        <th class="p-3">Last Active</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+                    {% for huser in high_risk_users %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                        <td class="p-3 font-bold text-slate-800 dark:text-white">{{ huser.patient_name }}</td>
+                        <td class="p-3">{{ huser.patient_email }}</td>
+                        <td class="p-3">
+                            <span class="font-extrabold text-rose-500">{{ huser.stress_score }} / 100</span>
+                        </td>
+                        <td class="p-3">
+                            <span class="px-2.5 py-1 bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 rounded-md font-semibold">
+                                {{ huser.risk_level }}
+                            </span>
+                        </td>
+                        <td class="p-3 text-slate-400">{{ huser.date }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Registered User Directory Table -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-xl transition-colors space-y-4">
+        <h3 class="font-outfit font-bold text-lg text-slate-800 dark:text-white">Registered User Directory</h3>
+        
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+                <thead class="bg-slate-50 dark:bg-slate-950 text-slate-400 uppercase tracking-wider font-bold">
+                    <tr>
+                        <th class="p-3">User Name</th>
+                        <th class="p-3">Email Address</th>
+                        <th class="p-3">Role</th>
+                        <th class="p-3">Account Created</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+                    {% for usr in users %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                        <td class="p-3 font-semibold text-slate-800 dark:text-white">{{ usr.name }}</td>
+                        <td class="p-3">{{ usr.email }}</td>
+                        <td class="p-3">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold {% if usr.is_admin %}bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20{% else %}bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400{% endif %}">
+                                {% if usr.is_admin %}Administrator{% else %}Standard User{% endif %}
+                            </span>
+                        </td>
+                        <td class="p-3 text-slate-400">{{ usr.created_at or '2026-07-25' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Generated Clinical Reports Table -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-xl transition-colors space-y-4">
+        <h3 class="font-outfit font-bold text-lg text-slate-800 dark:text-white">Generated Assessment & Clinical Reports</h3>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+                <thead class="bg-slate-50 dark:bg-slate-950 text-slate-400 uppercase tracking-wider font-bold">
+                    <tr>
+                        <th class="p-3">Report Title</th>
+                        <th class="p-3">Patient Name</th>
+                        <th class="p-3">Date</th>
+                        <th class="p-3">Assessment Status</th>
+                        <th class="p-3 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+                    {% for rep in reports %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                        <td class="p-3 font-bold text-slate-800 dark:text-white">{{ rep.title }}</td>
+                        <td class="p-3">{{ rep.patient_name }}</td>
+                        <td class="p-3 text-slate-400">{{ rep.date }}</td>
+                        <td class="p-3">
+                            <span class="px-2.5 py-1 rounded-md text-[10px] font-bold {{ rep.risk_badge or 'bg-teal-500/10 text-teal-600' }}">
+                                {{ rep.risk_level or rep.conflict_intensity or rep.cognitive_tier or 'Completed' }}
+                            </span>
+                        </td>
+                        <td class="p-3 text-right space-x-2">
+                            <a href="/report?type={{ rep.report_type }}&session_id={{ rep.session_id }}" class="px-3 py-1 bg-teal-600 hover:bg-teal-500 text-white font-semibold text-[10px] rounded-lg shadow-sm transition">
+                                View / Export
+                            </a>
+                            <button onclick="deleteReportRecord('{{ rep.session_id }}', '{{ rep.report_type }}')" class="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-[10px] rounded-lg shadow-sm transition">
+                                Delete
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function deleteReportRecord(reportId, reportType) {
+    if (confirm("Delete this report permanently?")) {
+        try {
+            const res = await fetch('/api/admin/delete-report', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ report_id: reportId, report_type: reportType })
+            });
+            const data = await res.json();
+            if (data.success) {
+                window.location.reload();
+            }
+        } catch (err) {
+            alert("Error deleting report.");
+        }
+    }
+}
+</script>
+{% endblock %}

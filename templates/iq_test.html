@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}MindSense-AI | Adaptive IQ Test{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 w-full flex-grow flex flex-col justify-center">
+    
+    <!-- Test Card Container -->
+    <div id="iq-test-card" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-10 backdrop-blur-xl relative overflow-hidden transition-colors">
+        
+        <!-- Start Screen -->
+        <div id="start-screen" class="text-center space-y-6 py-8">
+            <div class="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center justify-center text-3xl mx-auto shadow-lg shadow-amber-500/10">
+                <i class="fa-solid fa-brain"></i>
+            </div>
+            <div>
+                <h1 class="font-outfit font-extrabold text-3xl text-slate-800 dark:text-white">Adaptive Cognitive & IQ Test</h1>
+                <p class="text-slate-500 dark:text-slate-400 text-sm max-w-lg mx-auto mt-2">
+                    20 Adaptive Questions | 30 Seconds per Question | Instant Dynamic Difficulty (Easy &rarr; Medium &rarr; Hard).
+                </p>
+            </div>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-xl mx-auto pt-4 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                <div class="p-4 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <i class="fa-solid fa-bolt text-amber-500 text-lg block mb-1"></i>
+                    <span>Adaptive Scaling</span>
+                </div>
+                <div class="p-4 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <i class="fa-solid fa-stopwatch text-rose-500 text-lg block mb-1"></i>
+                    <span>30s Per Question</span>
+                </div>
+                <div class="p-4 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <i class="fa-solid fa-award text-teal-500 text-lg block mb-1"></i>
+                    <span>Official Report</span>
+                </div>
+            </div>
+
+            <button onclick="startIQTestSession()" class="px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold rounded-2xl shadow-xl shadow-amber-500/25 transition transform active:scale-95 text-base">
+                Begin Assessment Now
+            </button>
+        </div>
+
+        <!-- Active Question Quiz Screen -->
+        <div id="quiz-screen" class="hidden space-y-6">
+            
+            <!-- Progress & Timer Bar -->
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+                <div class="flex items-center gap-3">
+                    <span id="question-progress" class="font-outfit font-extrabold text-lg text-slate-800 dark:text-white">Question 1 / 20</span>
+                    <span id="difficulty-badge" class="px-3 py-1 bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 text-xs font-bold rounded-full">
+                        Easy
+                    </span>
+                    <span id="category-badge" class="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-medium rounded-full hidden sm:inline">
+                        Number Sequence
+                    </span>
+                </div>
+
+                <!-- 30s Countdown Timer -->
+                <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-950 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <i class="fa-solid fa-clock text-amber-500"></i>
+                    <span id="timer-display" class="font-mono font-extrabold text-base text-amber-600 dark:text-amber-400">30s</span>
+                </div>
+            </div>
+
+            <!-- Question Statement -->
+            <div class="bg-slate-50 dark:bg-slate-950/60 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Question Prompt</span>
+                <h2 id="question-text" class="font-outfit font-bold text-xl sm:text-2xl text-slate-800 dark:text-white leading-snug">
+                    What is the next number in this sequence?
+                </h2>
+            </div>
+
+            <!-- Options Grid -->
+            <div id="options-container" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Options rendered dynamically -->
+            </div>
+
+            <!-- Next Question Footer Action -->
+            <div class="flex items-center justify-between pt-4">
+                <span class="text-xs text-slate-400">Select an answer to proceed.</span>
+                <button id="btn-next-q" onclick="submitSelectedAnswer()" disabled class="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-600 disabled:opacity-50 hover:from-amber-400 hover:to-orange-500 text-white font-semibold rounded-xl transition shadow-md">
+                    Next Question <i class="fa-solid fa-chevron-right ml-1 text-xs"></i>
+                </button>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/iq_test.js') }}"></script>
+{% endblock %}

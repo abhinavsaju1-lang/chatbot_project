@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block title %}MindSense-AI | Mental State Dashboard & Analytics{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 w-full space-y-8">
+    
+    <!-- Dashboard Header -->
+    <div class="flex flex-col gap-6 bg-white/70 dark:bg-black/40 border border-white/50 dark:border-white/10 p-6 sm:p-8 rounded-2xl backdrop-blur-xl shadow-xl transition-colors page-fade-in">
+        <div>
+            <h1 class="font-outfit font-extrabold text-2xl sm:text-3xl text-slate-800 dark:text-white">Mental State &amp; Analytics Dashboard</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Real-time mental health metrics, adaptive IQ scores, and relationship evaluations for <strong>{{ user_name }}</strong>.</p>
+        </div>
+        
+        <!-- Large CTA Buttons -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <a href="/iq" class="cta-card flex items-center gap-4 px-6 py-5 bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold rounded-2xl shadow-xl shadow-amber-500/30 transition-all">
+                <div class="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-2xl shrink-0">🧠</div>
+                <div>
+                    <div class="text-base font-extrabold">Take IQ Test</div>
+                    <div class="text-xs font-normal opacity-80 mt-0.5">20 adaptive questions</div>
+                </div>
+            </a>
+            <a href="/chat?mode=divorce" class="cta-card flex items-center gap-4 px-6 py-5 bg-gradient-to-br from-indigo-600 to-purple-700 hover:from-indigo-500 hover:to-purple-600 text-white font-bold rounded-2xl shadow-xl shadow-indigo-500/30 transition-all">
+                <div class="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-2xl shrink-0">⚖️</div>
+                <div>
+                    <div class="text-base font-extrabold">Divorce Counseling</div>
+                    <div class="text-xs font-normal opacity-80 mt-0.5">Relationship guidance</div>
+                </div>
+            </a>
+            <a href="/chat?mode=mental" class="cta-card flex items-center gap-4 px-6 py-5 bg-gradient-to-br from-teal-500 to-emerald-600 hover:from-teal-400 hover:to-emerald-500 text-white font-bold rounded-2xl shadow-xl shadow-teal-500/30 transition-all">
+                <div class="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-2xl shrink-0">🌿</div>
+                <div>
+                    <div class="text-base font-extrabold">Mental Health Check</div>
+                    <div class="text-xs font-normal opacity-80 mt-0.5">Supportive AI counselor</div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- Stat Overview Cards Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+
+        <!-- Card: Total Sessions -->
+        <div class="bg-white/70 dark:bg-black/40 border border-white/50 dark:border-white/10 p-6 rounded-2xl backdrop-blur-xl shadow-md transition-colors hover:border-teal-500/40 group">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Sessions</span>
+                <div class="w-10 h-10 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 flex items-center justify-center group-hover:scale-110 transition">
+                    <i class="fa-solid fa-comments text-lg"></i>
+                </div>
+            </div>
+            <div class="mt-4">
+                <span class="font-outfit font-extrabold text-3xl text-slate-800 dark:text-white" data-count-to="{{ stats.total_sessions }}">{{ stats.total_sessions }}</span>
+                <span class="text-xs text-slate-400 ml-2">recorded</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-2">Across all counseling modules</p>
+        </div>
+
+        <!-- Card: Current Primary Mood -->
+        <div class="bg-white/70 dark:bg-black/40 border border-white/50 dark:border-white/10 p-6 rounded-2xl backdrop-blur-xl shadow-md transition-colors hover:border-rose-500/40 group">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Current Mood</span>
+                <div class="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-500 border border-rose-500/20 flex items-center justify-center group-hover:scale-110 transition">
+                    <i class="fa-solid fa-heart-pulse text-lg"></i>
+                </div>
+            </div>
+            <div class="mt-4">
+                <span class="font-outfit font-extrabold text-3xl text-teal-600 dark:text-teal-400">{{ stats.latest_emotion }}</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-2">Latest detected emotional state</p>
+        </div>
+
+        <!-- Card: IQ Score -->
+        <div class="bg-white/70 dark:bg-black/40 border border-white/50 dark:border-white/10 p-6 rounded-2xl backdrop-blur-xl shadow-md transition-colors hover:border-amber-500/40 group">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Latest IQ Score</span>
+                <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center justify-center group-hover:scale-110 transition">
+                    <i class="fa-solid fa-brain text-lg"></i>
+                </div>
+            </div>
+            <div class="mt-4">
+                <span class="font-outfit font-extrabold text-3xl text-amber-500" data-count-to="{{ stats.latest_iq_score }}">{{ stats.latest_iq_score }}</span>
+                <span class="text-xs text-slate-400 ml-1">IQ</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-2">Adaptive cognitive assessment</p>
+        </div>
+
+        <!-- Card: Overall Wellness Ring -->
+        <div class="bg-white/70 dark:bg-black/40 border border-white/50 dark:border-white/10 p-6 rounded-2xl backdrop-blur-xl shadow-md transition-colors hover:border-emerald-500/40 group">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Overall Wellness</span>
+                <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center justify-center group-hover:scale-110 transition">
+                    <i class="fa-solid fa-shield-heart text-lg"></i>
+                </div>
+            </div>
+            <div class="mt-3 flex items-center gap-4">
+                <!-- SVG Wellness Ring -->
+                <div class="relative w-16 h-16 shrink-0">
+                    <svg viewBox="0 0 36 36" class="w-16 h-16 -rotate-90">
+                        <circle cx="18" cy="18" r="14" fill="none" stroke="currentColor" stroke-width="3" class="text-emerald-100 dark:text-slate-700"/>
+                        <circle cx="18" cy="18" r="14" fill="none" stroke="currentColor" stroke-width="3"
+                            stroke-dasharray="{{ stats.overall_wellness }}, 100"
+                            stroke-linecap="round"
+                            class="text-emerald-500 transition-all duration-1000"/>
+                    </svg>
+                    <span class="absolute inset-0 flex items-center justify-center font-outfit font-extrabold text-xs text-emerald-600 dark:text-emerald-400">{{ stats.overall_wellness }}</span>
+                </div>
+                <div>
+                    <span class="font-outfit font-extrabold text-2xl text-emerald-600 dark:text-emerald-400">{{ stats.overall_wellness }}</span>
+                    <span class="text-xs text-slate-400"> / 100</span>
+                    <p class="text-xs text-slate-400 mt-0.5">Mental balance score</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Visual Charts Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        <!-- Chart 1: Emotion Frequency Distribution -->
+        <div class="bg-white/70 dark:bg-black/40 border border-white/50 dark:border-white/10 p-6 rounded-2xl backdrop-blur-xl shadow-xl transition-colors flex flex-col">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-outfit font-bold text-lg text-slate-800 dark:text-white">Emotion Frequency Distribution</h3>
+                <span class="text-xs px-2.5 py-1 bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 rounded-full font-medium">NLP Analysis</span>
+            </div>
+            <div class="h-72 relative">
+                <canvas id="emotionDoughnutChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Chart 2: 7-Day Wellness & Stress Trend -->
+        <div class="bg-white/70 dark:bg-black/40 border border-white/50 dark:border-white/10 p-6 rounded-2xl backdrop-blur-xl shadow-xl transition-colors flex flex-col">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-outfit font-bold text-lg text-slate-800 dark:text-white">7-Day Wellness & Stress Trend</h3>
+                <span class="text-xs px-2.5 py-1 bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 rounded-full font-medium">7-Day Progress</span>
+            </div>
+            <div class="h-72 relative">
+                <canvas id="weeklyTrendLineChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stress & Anxiety Progress Bars -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white/70 dark:bg-black/40 border border-white/50 dark:border-white/10 p-6 rounded-2xl shadow-md space-y-5 transition-colors">
+            <h3 class="font-outfit font-bold text-base text-slate-800 dark:text-white">Psychological Indicators</h3>
+            
+            <div class="space-y-1.5">
+                <div class="flex justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    <span><i class="fa-solid fa-bolt text-amber-500 mr-1"></i>Stress Index</span>
+                    <span class="text-amber-500 font-bold">{{ stats.stress_index }}/100</span>
+                </div>
+                <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                    <div class="h-2.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 transition-all duration-1000" style="width: {{ stats.stress_index }}%"></div>
+                </div>
+            </div>
+
+            <div class="space-y-1.5">
+                <div class="flex justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    <span><i class="fa-solid fa-wave-square text-indigo-500 mr-1"></i>Anxiety Score</span>
+                    <span class="text-indigo-500 font-bold">{{ stats.anxiety_score }}/100</span>
+                </div>
+                <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                    <div class="h-2.5 rounded-full bg-gradient-to-r from-indigo-400 to-indigo-600 transition-all duration-1000" style="width: {{ stats.anxiety_score }}%"></div>
+                </div>
+            </div>
+
+            <div class="space-y-1.5">
+                <div class="flex justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    <span><i class="fa-solid fa-shield-heart text-emerald-500 mr-1"></i>Overall Balance</span>
+                    <span class="text-emerald-500 font-bold">{{ stats.overall_wellness }}/100</span>
+                </div>
+                <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                    <div class="h-2.5 rounded-full bg-gradient-to-r from-emerald-400 to-teal-500 transition-all duration-1000" style="width: {{ stats.overall_wellness }}%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Facts Card -->
+        <div class="bg-white/70 dark:bg-black/40 border border-white/50 dark:border-white/10 p-6 rounded-2xl shadow-md space-y-4 transition-colors">
+            <h3 class="font-outfit font-bold text-base text-slate-800 dark:text-white">Session Overview</h3>
+            <div class="space-y-3">
+                <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <span class="text-xs font-semibold text-slate-500 dark:text-slate-400"><i class="fa-solid fa-handshake-angle text-indigo-500 mr-2"></i>Relationship Health</span>
+                    <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400">{{ stats.relationship_health }}</span>
+                </div>
+                <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <span class="text-xs font-semibold text-slate-500 dark:text-slate-400"><i class="fa-solid fa-brain text-amber-500 mr-2"></i>Cognitive IQ Score</span>
+                    <span class="text-xs font-bold text-amber-600 dark:text-amber-400">{{ stats.latest_iq_score }} Points</span>
+                </div>
+                <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <span class="text-xs font-semibold text-slate-500 dark:text-slate-400"><i class="fa-solid fa-comments text-teal-500 mr-2"></i>Total Chat Sessions</span>
+                    <span class="text-xs font-bold text-teal-600 dark:text-teal-400">{{ stats.total_sessions }}</span>
+                </div>
+                <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <span class="text-xs font-semibold text-slate-500 dark:text-slate-400"><i class="fa-solid fa-heart-pulse text-rose-500 mr-2"></i>Latest Mood</span>
+                    <span class="text-xs font-bold text-rose-600 dark:text-rose-400">{{ stats.latest_emotion }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feature Quick Launch Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <a href="/iq" class="bg-white/70 dark:bg-black/40 border border-white/50 dark:border-white/10 p-6 rounded-2xl hover:border-amber-500/40 hover:shadow-lg hover:shadow-amber-500/10 transition group space-y-3 shadow-md">
+            <div class="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition">
+                <i class="fa-solid fa-brain"></i>
+            </div>
+            <h3 class="font-outfit font-bold text-lg text-slate-800 dark:text-white group-hover:text-amber-500 transition">Adaptive IQ Assessment</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">20 Questions, 30s countdown timer. Dynamic Easy → Medium → Hard difficulty scaling with cognitive report.</p>
+            <span class="inline-flex items-center gap-2 text-xs font-semibold text-amber-600 dark:text-amber-400">Launch IQ Test <i class="fa-solid fa-arrow-right"></i></span>
+        </a>
+
+        <a href="/chat?mode=divorce" class="bg-white/70 dark:bg-black/40 border border-white/50 dark:border-white/10 p-6 rounded-2xl hover:border-indigo-500/40 hover:shadow-lg hover:shadow-indigo-500/10 transition group space-y-3 shadow-md">
+            <div class="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition">
+                <i class="fa-solid fa-handshake-angle"></i>
+            </div>
+            <h3 class="font-outfit font-bold text-lg text-slate-800 dark:text-white group-hover:text-indigo-500 transition">Divorce Counseling</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">Relationship separation guidance, co-parenting strategies, trust rebuilding, and conflict mediation.</p>
+            <span class="inline-flex items-center gap-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400">Start Session <i class="fa-solid fa-arrow-right"></i></span>
+        </a>
+
+        <a href="/report" class="bg-white/70 dark:bg-black/40 border border-white/50 dark:border-white/10 p-6 rounded-2xl hover:border-rose-500/40 hover:shadow-lg hover:shadow-rose-500/10 transition group space-y-3 shadow-md">
+            <div class="w-12 h-12 rounded-xl bg-rose-500/10 text-rose-500 border border-rose-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition">
+                <i class="fa-solid fa-file-pdf"></i>
+            </div>
+            <h3 class="font-outfit font-bold text-lg text-slate-800 dark:text-white group-hover:text-rose-500 transition">Clinical Summary Reports</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">View and print professional PDF reports for IQ, Mental Health, and Divorce Counseling sessions.</p>
+            <span class="inline-flex items-center gap-2 text-xs font-semibold text-rose-600 dark:text-rose-400">View Reports <i class="fa-solid fa-arrow-right"></i></span>
+        </a>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const statsData = {
+        stress: {{ stats.stress_index }},
+        anxiety: {{ stats.anxiety_score }},
+        overall: {{ stats.overall_wellness }},
+        emotionCounts: {{ stats.emotion_counts | tojson }},
+        trendLabels: {{ stats.trend_labels | tojson }},
+        trendWellness: {{ stats.trend_wellness | tojson }},
+        trendStress: {{ stats.trend_stress | tojson }}
+    };
+</script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}
