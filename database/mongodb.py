@@ -1,186 +1,235 @@
 import os
-from flask_pymongo import PyMongo
+from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 
-mongo = PyMongo()
+# Module-level globals
+# Using raw MongoClient instead of flask_pymongo for full Atlas SRV compatibility.
+_client = None
+_db     = None
 
+
+class _MongoProxy:
+    """Thin proxy so all existing mongo.db.collection calls work unchanged."""
+    @property
+    def db(self):
+        return _db
+
+
+mongo = _MongoProxy()
+
+
+# ── Connection init (called once from app.py) ──────────────────────────────────
 def init_db(app):
-    """Initialize PyMongo database connection with Flask app."""
-    try:
-        app.config.setdefault('MONGO_CONNECT_TIMEOUT_MS', 2000)
-        app.config.setdefault('MONGO_SERVER_SELECTION_TIMEOUT_MS', 2000)
-        mongo.init_app(app)
-        return mongo
-    except Exception as e:
-        print(f"[Warning] PyMongo initialization warning: {e}")
+    """Connect to MongoDB Atlas using raw MongoClient. Pings on startup."""
+    global _client, _db
+    uri = app.config.get('MONGO_URI', '')
+    if not uri:
+        print("[DB] MONGO_URI is not set in config.")
         return None
 
-# 1. USERS COLLECTION
-def get_user_by_email(email):
-    """Retrieve user record from 'users' collection."""
     try:
-        if mongo.db is not None and hasattr(mongo.db, 'users'):
+        _client = MongoClient(
+            uri,
+            serverSelectionTimeoutMS=8000,
+            connectTimeoutMS=8000,
+            socketTimeoutMS=10000,
+            tls=True,                       # Atlas always requires TLS
+            tlsAllowInvalidCertificates=False,
+        )
+        # Verify the connection is live before the first request hits
+        _client.admin.command('ping')
+        # Parse DB name from URI (e.g. .../mindsense_db?appName=...)
+        db_name = uri.split('/')[-1].split('?')[0] or 'mindsense_db'
+        _db = _client[db_name]
+        print(f"[DB] Connected to MongoDB Atlas — database: '{db_name}'")
+        return _client
+    except (ConnectionFailure, ServerSelectionTimeoutError) as e:
+        print(f"[DB] MongoDB connection FAILED: {e}")
+        return None
+    except Exception as e:
+        print(f"[DB] Unexpected MongoDB error during init: {e}")
+        return None
+
+
+# ── 1. USERS ───────────────────────────────────────────────────────────────────
+def get_user_by_email(email):
+    """Retrieve a user document by email address."""
+    try:
+        if mongo.db is not None:
             return mongo.db.users.find_one({"email": email})
     except Exception as e:
-        print(f"[DB Info] get_user_by_email fallback: {e}")
+        print(f"[DB] get_user_by_email error: {e}")
     return None
+
 
 def create_user(user_data):
-    """Insert a new user document into 'users' collection."""
+    """Insert a new user document into the users collection."""
     try:
-        if mongo.db is not None and hasattr(mongo.db, 'users'):
+        if mongo.db is not None:
             return mongo.db.users.insert_one(user_data)
     except Exception as e:
-        print(f"[DB Info] create_user fallback: {e}")
+        print(f"[DB] create_user error: {e}")
     return None
+
 
 def get_all_users():
-    """Retrieve all users from 'users' collection for Admin Panel."""
+    """Return all users (password excluded) for the Admin Panel."""
     try:
-        if mongo.db is not None and hasattr(mongo.db, 'users'):
+        if mongo.db is not None:
             return list(mongo.db.users.find({}, {"_id": 0, "password": 0}))
     except Exception as e:
-        print(f"[DB Info] get_all_users fallback: {e}")
+        print(f"[DB] get_all_users error: {e}")
     return []
 
-# HIGH-RISK USERS MONITORING FOR ADMIN
+
+# ── 2. HIGH-RISK MONITORING ────────────────────────────────────────────────────
 def get_high_risk_users():
-    """Retrieve users with high stress scores (>= 70) or depression risk for early intervention."""
+    """Return users with stress score >= 65 for Admin intervention monitoring."""
     high_risk_list = []
     try:
-        if mongo.db is not None and hasattr(mongo.db, 'mental_reports'):
-            reports = list(mongo.db.mental_reports.find({"scores.stress": {"$gte": 65}}, {"_id": 0}))
+        if mongo.db is not None:
+            reports = list(mongo.db.mental_reports.find(
+                {"scores.stress": {"$gte": 65}}, {"_id": 0}
+            ))
             for rep in reports:
                 high_risk_list.append({
-                    'patient_name': rep.get('patient_name', 'Anonymous'),
+                    'patient_name':  rep.get('patient_name', 'Anonymous'),
                     'patient_email': rep.get('patient_email', 'N/A'),
-                    'stress_score': rep.get('scores', {}).get('stress', 75),
-                    'risk_level': rep.get('risk_level', 'High Risk'),
-                    'date': rep.get('date', 'Recent')
+                    'stress_score':  rep.get('scores', {}).get('stress', 75),
+                    'risk_level':    rep.get('risk_level', 'High Risk'),
+                    'date':          rep.get('date', 'Recent'),
                 })
     except Exception as e:
-        print(f"[DB Info] get_high_risk_users fallback: {e}")
-        
-    if not high_risk_list:
-        high_risk_list = [
-            {'patient_name': 'Jane Doe', 'patient_email': 'jane.doe@example.com', 'stress_score': 82, 'risk_level': 'High Risk - Intervention Suggested', 'date': 'July 25, 2026'},
-            {'patient_name': 'Robert Smith', 'patient_email': 'robert@example.com', 'stress_score': 76, 'risk_level': 'Moderate Stress Risk', 'date': 'July 25, 2026'}
-        ]
+        print(f"[DB] get_high_risk_users error: {e}")
     return high_risk_list
 
-# 2. CHAT SESSIONS COLLECTION
+
+# ── 3. CHAT SESSIONS ───────────────────────────────────────────────────────────
 def save_chat_session(session_data):
-    """Save a conversation turn to 'chat_sessions' collection."""
     try:
-        if mongo.db is not None and hasattr(mongo.db, 'chat_sessions'):
+        if mongo.db is not None:
             return mongo.db.chat_sessions.insert_one(session_data)
     except Exception as e:
-        print(f"[DB Info] save_chat_session fallback: {e}")
+        print(f"[DB] save_chat_session error: {e}")
     return None
 
+
 def get_user_chat_history(user_id, mode=None):
-    """Fetch chat history for a user, optionally filtered by mode."""
     try:
-        if mongo.db is not None and hasattr(mongo.db, 'chat_sessions'):
+        if mongo.db is not None:
             query = {"user_id": user_id}
             if mode:
                 query["mode"] = mode
             return list(mongo.db.chat_sessions.find(query).sort("timestamp", 1))
     except Exception as e:
-        print(f"[DB Info] get_user_chat_history fallback: {e}")
+        print(f"[DB] get_user_chat_history error: {e}")
     return []
 
+
 def clear_user_chat_history(user_id, mode):
-    """Clear chat history for a specific user and module when clicking 'New Chat'."""
     try:
-        if mongo.db is not None and hasattr(mongo.db, 'chat_sessions'):
+        if mongo.db is not None:
             mongo.db.chat_sessions.delete_many({"user_id": user_id, "mode": mode})
             return True
     except Exception as e:
-        print(f"[DB Info] clear_user_chat_history fallback: {e}")
+        print(f"[DB] clear_user_chat_history error: {e}")
     return False
 
-# 3. MENTAL REPORTS COLLECTION
+
+# ── 4. MENTAL REPORTS ─────────────────────────────────────────────────────────
 def save_mental_report(report_data):
     try:
-        if mongo.db is not None and hasattr(mongo.db, 'mental_reports'):
+        if mongo.db is not None:
             return mongo.db.mental_reports.insert_one(report_data)
     except Exception as e:
-        print(f"[DB Info] save_mental_report fallback: {e}")
+        print(f"[DB] save_mental_report error: {e}")
     return None
+
 
 def get_user_mental_reports(user_id):
     try:
-        if mongo.db is not None and hasattr(mongo.db, 'mental_reports'):
-            return list(mongo.db.mental_reports.find({"user_id": user_id}).sort("timestamp", -1))
+        if mongo.db is not None:
+            return list(mongo.db.mental_reports.find(
+                {"user_id": user_id}).sort("timestamp", -1))
     except Exception as e:
-        print(f"[DB Info] get_user_mental_reports fallback: {e}")
+        print(f"[DB] get_user_mental_reports error: {e}")
     return []
 
-# 4. RELATIONSHIP REPORTS COLLECTION
+
+# ── 5. RELATIONSHIP REPORTS ───────────────────────────────────────────────────
 def save_relationship_report(report_data):
     try:
-        if mongo.db is not None and hasattr(mongo.db, 'relationship_reports'):
+        if mongo.db is not None:
             return mongo.db.relationship_reports.insert_one(report_data)
     except Exception as e:
-        print(f"[DB Info] save_relationship_report fallback: {e}")
+        print(f"[DB] save_relationship_report error: {e}")
     return None
+
 
 def get_user_relationship_reports(user_id):
     try:
-        if mongo.db is not None and hasattr(mongo.db, 'relationship_reports'):
-            return list(mongo.db.relationship_reports.find({"user_id": user_id}).sort("timestamp", -1))
+        if mongo.db is not None:
+            return list(mongo.db.relationship_reports.find(
+                {"user_id": user_id}).sort("timestamp", -1))
     except Exception as e:
-        print(f"[DB Info] get_user_relationship_reports fallback: {e}")
+        print(f"[DB] get_user_relationship_reports error: {e}")
     return []
 
-# 5. IQ REPORTS COLLECTION
+
+# ── 6. IQ REPORTS ─────────────────────────────────────────────────────────────
 def save_iq_report(report_data):
     try:
-        if mongo.db is not None and hasattr(mongo.db, 'iq_reports'):
+        if mongo.db is not None:
             return mongo.db.iq_reports.insert_one(report_data)
     except Exception as e:
-        print(f"[DB Info] save_iq_report fallback: {e}")
+        print(f"[DB] save_iq_report error: {e}")
     return None
+
 
 def get_user_iq_reports(user_id):
     try:
-        if mongo.db is not None and hasattr(mongo.db, 'iq_reports'):
-            return list(mongo.db.iq_reports.find({"user_id": user_id}).sort("timestamp", -1))
+        if mongo.db is not None:
+            return list(mongo.db.iq_reports.find(
+                {"user_id": user_id}).sort("timestamp", -1))
     except Exception as e:
-        print(f"[DB Info] get_user_iq_reports fallback: {e}")
+        print(f"[DB] get_user_iq_reports error: {e}")
     return []
 
-# ALL REPORTS FOR ADMIN
+
+# ── 7. ALL REPORTS (Admin) ────────────────────────────────────────────────────
 def get_all_reports():
     reports = []
     try:
         if mongo.db is not None:
-            if hasattr(mongo.db, 'mental_reports'):
-                reports.extend(list(mongo.db.mental_reports.find({}, {"_id": 0}).sort("timestamp", -1)))
-            if hasattr(mongo.db, 'relationship_reports'):
-                reports.extend(list(mongo.db.relationship_reports.find({}, {"_id": 0}).sort("timestamp", -1)))
-            if hasattr(mongo.db, 'iq_reports'):
-                reports.extend(list(mongo.db.iq_reports.find({}, {"_id": 0}).sort("timestamp", -1)))
+            reports.extend(list(mongo.db.mental_reports.find(
+                {}, {"_id": 0}).sort("timestamp", -1)))
+            reports.extend(list(mongo.db.relationship_reports.find(
+                {}, {"_id": 0}).sort("timestamp", -1)))
+            reports.extend(list(mongo.db.iq_reports.find(
+                {}, {"_id": 0}).sort("timestamp", -1)))
     except Exception as e:
-        print(f"[DB Info] get_all_reports fallback: {e}")
+        print(f"[DB] get_all_reports error: {e}")
     return reports
+
 
 def delete_report(report_id, report_type='mental'):
     try:
         if mongo.db is not None:
-            coll_name = f"{report_type}_reports" if not report_type.endswith('_reports') else report_type
-            if hasattr(mongo.db, coll_name):
-                mongo.db[coll_name].delete_one({"session_id": report_id})
-                return True
+            coll_name = (f"{report_type}_reports"
+                         if not report_type.endswith('_reports')
+                         else report_type)
+            mongo.db[coll_name].delete_one({"session_id": report_id})
+            return True
     except Exception as e:
-        print(f"[DB Info] delete_report error: {e}")
+        print(f"[DB] delete_report error: {e}")
     return False
 
-# 6. FEEDBACK COLLECTION
+
+# ── 8. FEEDBACK ───────────────────────────────────────────────────────────────
 def save_feedback(feedback_data):
     try:
-        if mongo.db is not None and hasattr(mongo.db, 'feedback'):
+        if mongo.db is not None:
             return mongo.db.feedback.insert_one(feedback_data)
     except Exception as e:
-        print(f"[DB Info] save_feedback fallback: {e}")
+        print(f"[DB] save_feedback error: {e}")
     return None

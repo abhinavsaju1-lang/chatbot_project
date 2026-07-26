@@ -71,13 +71,18 @@
                         </td>
                         <td class="p-3 text-slate-400">{{ huser.date }}</td>
                     </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="p-6 text-center text-slate-400 dark:text-slate-500 italic">
+                            <i class="fa-solid fa-circle-check text-emerald-400 mr-2"></i>No high-risk stress alerts detected. All users are within safe thresholds.
+                        </td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
 
-    <!-- Registered User Directory Table -->
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-xl transition-colors space-y-4">
         <h3 class="font-outfit font-bold text-lg text-slate-800 dark:text-white">Registered User Directory</h3>
         
@@ -101,7 +106,13 @@
                                 {% if usr.is_admin %}Administrator{% else %}Standard User{% endif %}
                             </span>
                         </td>
-                        <td class="p-3 text-slate-400">{{ usr.created_at or '2026-07-25' }}</td>
+                        <td class="p-3 text-slate-400">{{ usr.created_at or 'N/A' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="p-6 text-center text-slate-400 dark:text-slate-500 italic">
+                            <i class="fa-solid fa-database mr-2 text-teal-400"></i>No registered users found in the database yet.
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -111,7 +122,7 @@
 
     <!-- Generated Clinical Reports Table -->
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-xl transition-colors space-y-4">
-        <h3 class="font-outfit font-bold text-lg text-slate-800 dark:text-white">Generated Assessment & Clinical Reports</h3>
+        <h3 class="font-outfit font-bold text-lg text-slate-800 dark:text-white">Generated Assessment &amp; Clinical Reports</h3>
 
         <div class="overflow-x-auto">
             <table class="w-full text-left text-xs text-slate-600 dark:text-slate-300">
@@ -142,6 +153,12 @@
                             <button onclick="deleteReportRecord('{{ rep.session_id }}', '{{ rep.report_type }}')" class="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-[10px] rounded-lg shadow-sm transition">
                                 Delete
                             </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="p-6 text-center text-slate-400 dark:text-slate-500 italic">
+                            <i class="fa-solid fa-file-circle-xmark mr-2 text-slate-400"></i>No assessment reports have been generated yet. Reports will appear here after users complete sessions.
                         </td>
                     </tr>
                     {% endfor %}
