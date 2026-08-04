@@ -34,8 +34,9 @@
                 </div>
             </div>
 
-            <button onclick="startIQTestSession()" class="px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold rounded-2xl shadow-xl shadow-amber-500/25 transition transform active:scale-95 text-base">
-                Begin Assessment Now
+            <button id="btn-start" onclick="startIQTestSession()" class="px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:opacity-50 text-white font-bold rounded-2xl shadow-xl shadow-amber-500/25 transition transform active:scale-95 flex items-center justify-center mx-auto text-base">
+                <span id="start-text">Begin Assessment Now</span>
+                <i id="start-spinner" class="fa-solid fa-circle-notch fa-spin hidden ml-3"></i>
             </button>
         </div>
 

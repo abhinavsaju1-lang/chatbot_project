@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, session
 from database.mongodb import get_user_chat_history, get_user_mental_reports, get_user_relationship_reports, get_user_iq_reports
-from routes.chat import TEMPORARY_CHAT_LOGS
+from routes.counseling import TEMPORARY_CHAT_LOGS
 from datetime import datetime, timedelta
 
 dashboard_bp = Blueprint('dashboard', __name__)

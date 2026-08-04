@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, session
 from datetime import datetime
 import uuid
-from ai.iq_questions import get_adaptive_question, IQ_QUESTION_BANK
+from ai.iq_generator import generate_iq_test_batch
 from database.mongodb import save_iq_report
 
 iq_bp = Blueprint('iq', __name__)
@@ -16,37 +16,46 @@ def iq_test_page():
 @iq_bp.route('/api/iq/start', methods=['POST'])
 def start_iq_test():
     """Start a new 20-question adaptive IQ test session."""
+    print("--- /API/IQ/START ROUTE HIT! ---", flush=True)
     user_email = session.get('user_email', 'candidate@mindsense.ai')
     session_id = str(uuid.uuid4())
 
-    IQ_TEST_SESSIONS[session_id] = {
-        'session_id': session_id,
-        'user_email': user_email,
-        'current_difficulty': 'easy',
-        'question_index': 1,
-        'total_questions': 20,
-        'correct_count': 0,
-        'asked_ids': [],
-        'responses': [],
-        'start_time': datetime.now()
-    }
+    try:
+        # Batch generate all 20 questions dynamically
+        questions_batch = generate_iq_test_batch()
+        if not questions_batch or len(questions_batch) == 0:
+            return jsonify({'success': False, 'error': 'AI failed to generate a valid test.'}), 500
 
-    # Fetch first question (Easy level)
-    question = get_adaptive_question('easy', asked_ids=[])
-    IQ_TEST_SESSIONS[session_id]['asked_ids'].append(question['id'])
-    IQ_TEST_SESSIONS[session_id]['current_question'] = question
+        IQ_TEST_SESSIONS[session_id] = {
+            'session_id': session_id,
+            'user_email': user_email,
+            'questions': questions_batch, # store all questions
+            'question_index': 1,
+            'total_questions': len(questions_batch),
+            'correct_count': 0,
+            'responses': [],
+            'start_time': datetime.now()
+        }
 
-    return jsonify({
-        'success': True,
-        'session_id': session_id,
-        'question_index': 1,
-        'total_questions': 20,
-        'difficulty': 'Easy',
-        'category': question['category'],
-        'question': question['question'],
-        'options': question['options'],
-        'time_limit': 30
-    })
+        # Fetch first question from memory
+        question = questions_batch[0]
+        IQ_TEST_SESSIONS[session_id]['current_question'] = question
+
+        return jsonify({
+            'success': True,
+            'session_id': session_id,
+            'question_index': 1,
+            'total_questions': len(questions_batch),
+            'difficulty': question['difficulty'].capitalize(),
+            'category': question['category'],
+            'question': question['question'],
+            'options': question['options'],
+            'time_limit': 30
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @iq_bp.route('/api/iq/next', methods=['POST'])
 def next_iq_question():
@@ -70,29 +79,24 @@ def next_iq_question():
     test_state['responses'].append({
         'question_id': current_q['id'],
         'category': current_q['category'],
-        'difficulty': test_state['current_difficulty'],
+        'difficulty': current_q['difficulty'],
         'question': current_q['question'],
         'user_answer': user_answer,
         'correct_answer': current_q['answer'],
         'is_correct': is_correct,
-        'time_taken': time_taken
+        'time_taken': time_taken,
+        'explanation': current_q.get('explanation', '')
     })
-
-    # Adaptive difficulty scaling: Correct -> Hard, Incorrect -> Easy
-    if is_correct:
-        test_state['current_difficulty'] = 'hard'
-    else:
-        test_state['current_difficulty'] = 'easy'
 
     test_state['question_index'] += 1
 
-    # Check if 20 questions completed
+    # Check if completed
     if test_state['question_index'] > test_state['total_questions']:
         return finish_iq_test(session_id, current_q['answer'], is_correct)
 
-    # Fetch next question adaptively
-    next_q = get_adaptive_question(test_state['current_difficulty'], asked_ids=test_state['asked_ids'])
-    test_state['asked_ids'].append(next_q['id'])
+    # Fetch next question from memory
+    next_idx = test_state['question_index'] - 1
+    next_q = test_state['questions'][next_idx]
     test_state['current_question'] = next_q
 
     return jsonify({
@@ -103,7 +107,7 @@ def next_iq_question():
         'next_question_data': {
             'question_index': test_state['question_index'],
             'total_questions': test_state['total_questions'],
-            'difficulty': test_state['current_difficulty'].capitalize(),
+            'difficulty': next_q['difficulty'].capitalize(),
             'category': next_q['category'],
             'question': next_q['question'],
             'options': next_q['options'],
@@ -122,8 +126,28 @@ def finish_iq_test(session_id, last_correct_answer, is_correct):
     correct = test_state.get('correct_count', 0)
     accuracy = round((correct / total) * 100)
 
-    estimated_iq = max(80, min(145, 90 + int(accuracy * 0.5) + (5 if correct > 14 else 0)))
-    percentile = max(25, min(99, int(estimated_iq * 0.7)))
+    # Calculate weighted IQ score
+    base_iq = 85
+    weighted_score = 0
+    for r in responses:
+        if r['is_correct']:
+            if r['difficulty'] == 'hard':
+                weighted_score += 3
+            elif r['difficulty'] == 'medium':
+                weighted_score += 2
+            else:
+                weighted_score += 1
+                
+    estimated_iq = max(80, min(145, base_iq + weighted_score))
+    
+    # Calculate percentile based on normal distribution mean 100, sd 15
+    import math
+    def calculate_percentile(iq):
+        z = (iq - 100) / 15.0
+        return int(0.5 * (1 + math.erf(z / math.sqrt(2))) * 100)
+        
+    percentile = calculate_percentile(estimated_iq)
+    
     total_time = sum(r.get('time_taken', 15) for r in responses)
 
     report_data = {
@@ -141,7 +165,8 @@ def finish_iq_test(session_id, last_correct_answer, is_correct):
         'correct_answers': correct,
         'total_questions': total,
         'strengths': ['Pattern Recognition', 'Logical Deduction'],
-        'weaknesses': ['Spatial Math']
+        'weaknesses': ['Spatial Math'],
+        'responses': responses # Include responses and explanations
     }
 
     save_iq_report(report_data)

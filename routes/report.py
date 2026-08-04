@@ -1,8 +1,8 @@
 from flask import Blueprint, render_template, request, session
 from ai.report_generator import generate_session_report
 from database.mongodb import get_user_mental_reports, get_user_relationship_reports, get_user_iq_reports
-from routes.chat import TEMPORARY_CHAT_LOGS
-from routes.iq import IQ_TEST_SESSIONS
+from routes.counseling import TEMPORARY_CHAT_LOGS
+from routes.iq_test import IQ_TEST_SESSIONS
 
 report_bp = Blueprint('report', __name__)
 

@@ -27,9 +27,10 @@ def login():
         # ─── REGISTER ─────────────────────────────────────────────────────────
         if action == "register":
             # EXACT field names from login.html  ─ do NOT change these keys
-            name     = request.form.get("name",         "").strip()
-            email    = request.form.get("reg_email",    "").strip().lower()
-            password = request.form.get("reg_password", "").strip()
+            name     = request.form.get("name", "").strip()
+            gender   = request.form.get("gender", "Prefer not to say").strip()
+            email    = request.form.get("email", "").strip().lower()
+            password = request.form.get("password", "").strip()
 
             # ── Validation ────────────────────────────────────────────────────
             if not name or not email or not password:
@@ -53,11 +54,12 @@ def login():
 
                 result = users_col.insert_one({
                     "name":       name,
+                    "gender":     gender,
                     "email":      email,
                     # pbkdf2:sha256 — explicit algorithm so check_password_hash always matches
                     "password":   generate_password_hash(password, method="pbkdf2:sha256"),
                     "is_admin":   email.endswith("@mindsense.ai"),
-                    "created_at": "2026-07-26",
+                    "created_at": "2026-08-01",
                 })
                 print(f"[Auth] Successfully inserted user: {email}. Inserted ID: {result.inserted_id}", flush=True)
             except Exception as db_err:
@@ -69,17 +71,18 @@ def login():
                 return render_template("login.html", active_tab="register")
 
             # ── Auto-login after successful registration ───────────────────────
-            session["user_email"] = email
-            session["user_name"]  = name
-            session["is_admin"]   = email.endswith("@mindsense.ai")
+            session["user_email"]  = email
+            session["user_name"]   = name
+            session["user_gender"] = gender
+            session["is_admin"]    = email.endswith("@mindsense.ai")
             flash(f"Welcome, {name}! Your account has been created.", "success")
             return redirect(url_for("dashboard.dashboard"))
 
         # ─── SIGN IN ──────────────────────────────────────────────────────────
         else:
             # EXACT field names from login.html  ─ do NOT change these keys
-            email    = request.form.get("login_email",    "").strip().lower()
-            password = request.form.get("login_password", "").strip()
+            email    = request.form.get("email", "").strip().lower()
+            password = request.form.get("password", "").strip()
 
             if not email or not password:
                 flash("Email and password are required.", "danger")
@@ -103,9 +106,10 @@ def login():
                 flash("Invalid email or password.", "danger")
                 return render_template("login.html", active_tab="login")
 
-            session["user_email"] = user["email"]
-            session["user_name"]  = user["name"]
-            session["is_admin"]   = user.get("is_admin", False)
+            session["user_email"]  = user["email"]
+            session["user_name"]   = user["name"]
+            session["user_gender"] = user.get("gender", "Prefer not to say")
+            session["is_admin"]    = user.get("is_admin", False)
             return redirect(url_for("dashboard.dashboard"))
 
     active_tab = request.args.get("tab", "login")

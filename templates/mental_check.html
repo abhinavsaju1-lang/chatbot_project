@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}MindSense-AI | Mental Health Check{% endblock %}
+
+{% block content %}
+
+{% set accent      = "teal" %}
+{% set accent_hex  = "#14b8a6" %}
+{% set bot_icon    = "fa-leaf" %}
+{% set header_emoji = "🌿" %}
+{% set empty_emoji  = "💚" %}
+{% set mode_label   = "Mental Health Assessment" %}
+{% set mode_sub     = "Step-by-Step Structured Clinical Check" %}
+{% set placeholder  = "Type your answer here..." %}
+{% set chat_bg_user = "bg-teal-600" %}
+
+<div class="max-w-6xl mx-auto p-3 sm:p-6 w-full flex-grow flex flex-col justify-between h-[calc(100vh-5rem)]">
+    
+    <!-- Chat Header Bar -->
+    <div class="bg-teal-900/50 dark:bg-teal-950/80 border-teal-700/40 border backdrop-blur-xl p-4 rounded-2xl shadow-md flex items-center justify-between shrink-0 mb-3 transition-colors">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-teal-500/30 text-teal-200 border border-teal-500/40 flex items-center justify-center text-lg font-bold">
+                <i class="fa-solid {{ bot_icon }}"></i>
+            </div>
+            <div>
+                <h1 class="font-outfit font-extrabold text-base sm:text-lg text-white flex items-center gap-2">
+                    {{ header_emoji }} {{ mode_label | safe }}
+                    <span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold rounded-full border border-emerald-500/30">Active</span>
+                </h1>
+                <p class="text-xs text-teal-300">{{ mode_sub | safe }}</p>
+            </div>
+        </div>
+
+        <!-- Action Controls -->
+        <div class="flex items-center gap-2">
+            <a href="/mental-check" title="Restart Assessment" class="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-xl border border-white/20 transition flex items-center gap-1.5">
+                <i class="fa-solid fa-rotate-left text-teal-300"></i> Restart
+            </a>
+            <a href="/report?type=mental" class="px-3 py-2 bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold rounded-xl shadow-md transition flex items-center gap-1.5">
+                <i class="fa-solid fa-file-pdf"></i> Report
+            </a>
+        </div>
+    </div>
+
+    <!-- Mode Selector Tabs -->
+    <div class="flex items-center gap-2 mb-3 shrink-0">
+        <a href="/mental-check" class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-teal-600 text-white shadow-md">
+            🌿 Mental Health Check
+        </a>
+        <a href="/chat?mode=divorce" class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-white/60 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-500 hover:text-indigo-600">
+            ⚖️ Divorce Counseling
+        </a>
+    </div>
+
+    <!-- Messages Container -->
+    <div id="chat-messages" class="flex-grow bg-teal-50/60 dark:bg-teal-950/30 border-teal-200/50 dark:border-teal-800/40 border backdrop-blur-sm rounded-2xl p-4 sm:p-6 overflow-y-auto space-y-4 shadow-inner transition-colors">
+        <!-- Messages will be appended here by JS -->
+    </div>
+
+    <!-- Typing Indicator -->
+    <div id="typing-indicator" class="hidden items-center gap-2 p-3 text-xs text-slate-400 italic">
+        <div class="flex items-center gap-1">
+            <span class="w-2 h-2 rounded-full bg-teal-500 animate-bounce"></span>
+            <span class="w-2 h-2 rounded-full bg-teal-500 animate-bounce [animation-delay:0.2s]"></span>
+            <span class="w-2 h-2 rounded-full bg-teal-500 animate-bounce [animation-delay:0.4s]"></span>
+        </div>
+        <span>MindSense AI is processing...</span>
+    </div>
+
+    <!-- Input Form -->
+    <form id="chat-form" onsubmit="handleChatSubmit(event)" class="mt-3 flex items-center gap-2 shrink-0">
+        <input type="text" id="user-input" placeholder="{{ placeholder }}" autocomplete="off" required
+            class="flex-grow px-5 py-3.5 bg-white/70 dark:bg-slate-900/70 border border-teal-200 dark:border-teal-800 focus:border-teal-500 focus:ring-teal-500/20 backdrop-blur-sm rounded-2xl text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 transition shadow-sm">
+        <button type="submit" id="btn-send"
+            class="px-6 py-3.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 shadow-teal-500/30 text-white font-bold rounded-2xl shadow-lg transition-all transform hover:-translate-y-0.5 flex items-center gap-2">
+            <span>Send</span> <i class="fa-solid fa-paper-plane text-xs"></i>
+        </button>
+    </form>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const chatContainer = document.getElementById('chat-messages');
+    const chatForm = document.getElementById('chat-form');
+    const userInput = document.getElementById('user-input');
+    const typingIndicator = document.getElementById('typing-indicator');
+
+    // Load initial question dynamically on page load
+    window.addEventListener('DOMContentLoaded', () => {
+        const initialText = `{{ initial_message | replace('\n', '<br>') | safe }}`;
+        appendBotMessage(initialText);
+    });
+
+    async function handleChatSubmit(event) {
+        event.preventDefault();
+        const message = userInput.value.trim();
+        if (!message) return;
+
+        appendUserMessage(message);
+        userInput.value = '';
+        typingIndicator.classList.remove('hidden');
+
+        try {
+            const response = await fetch('/mental-check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: message })
+            });
+            const data = await response.json();
+            
+            typingIndicator.classList.add('hidden');
+            if (data.success) {
+                appendBotMessage(data.response);
+                if (data.step >= 9) {
+                    userInput.disabled = true;
+                    document.getElementById('btn-send').disabled = true;
+                }
+            } else {
+                appendBotMessage("An error occurred. Please try again.");
+            }
+        } catch (error) {
+            typingIndicator.classList.add('hidden');
+            appendBotMessage("Network error. Please check your connection.");
+        }
+    }
+
+    function appendUserMessage(text) {
+        const timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        const html = `
+            <div class="flex flex-col items-end space-y-1 animate-fade-slide">
+                <div class="bg-teal-600 text-white p-3.5 rounded-2xl rounded-tr-none max-w-lg text-sm shadow-md">
+                    ${text}
+                </div>
+                <span class="text-[10px] text-slate-400 font-medium mr-1">${timeStr}</span>
+            </div>
+        `;
+        chatContainer.insertAdjacentHTML('beforeend', html);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function appendBotMessage(text) {
+        // Format newlines
+        let formattedText = text.replace(/\n/g, '<br>');
+        // Format bold markdown if present (e.g. **text**)
+        formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        
+        const html = `
+            <div class="flex items-start gap-3 space-y-1 animate-fade-slide">
+                <div class="w-8 h-8 rounded-xl bg-teal-500/20 text-teal-400 border border-teal-500/30 flex items-center justify-center shrink-0 mt-1">
+                    <i class="fa-solid fa-leaf text-xs"></i>
+                </div>
+                <div class="space-y-1 max-w-xl">
+                    <div class="bg-white/80 dark:bg-slate-800/80 text-slate-800 dark:text-slate-100 p-4 rounded-2xl rounded-tl-none text-sm shadow-sm leading-relaxed backdrop-blur-sm">
+                        ${formattedText}
+                    </div>
+                </div>
+            </div>
+        `;
+        chatContainer.insertAdjacentHTML('beforeend', html);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+</script>
+{% endblock %}

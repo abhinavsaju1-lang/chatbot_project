@@ -7,8 +7,13 @@ let selectedOptionValue = null;
 let currentQuestionStartTime = Date.now();
 
 async function startIQTestSession() {
-    document.getElementById('start-screen').classList.add('hidden');
-    document.getElementById('quiz-screen').classList.remove('hidden');
+    const btn = document.getElementById('btn-start');
+    const text = document.getElementById('start-text');
+    const spinner = document.getElementById('start-spinner');
+    
+    btn.disabled = true;
+    text.textContent = "Generating Unique Test...";
+    spinner.classList.remove('hidden');
 
     try {
         const response = await fetch('/api/iq/start', {
@@ -18,13 +23,21 @@ async function startIQTestSession() {
 
         const data = await response.json();
         if (data.success) {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('quiz-screen').classList.remove('hidden');
             activeSessionId = data.session_id;
             renderQuestion(data);
         } else {
             alert(data.error || 'Failed to start test.');
+            btn.disabled = false;
+            text.textContent = "Begin Assessment Now";
+            spinner.classList.add('hidden');
         }
     } catch (err) {
         alert('Network error starting test.');
+        btn.disabled = false;
+        text.textContent = "Begin Assessment Now";
+        spinner.classList.add('hidden');
     }
 }
 

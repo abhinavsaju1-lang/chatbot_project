@@ -132,7 +132,7 @@ class MindSenseChatbot:
             except Exception as e:
                 print(f"[ChatGroq Warning] Could not initialize ChatGroq: {e}")
 
-    def generate_response(self, user_input, mode='mental', history_list=None, iq_level=1, past_bot_responses=None):
+    def generate_response(self, user_input, mode='mental', history_list=None, iq_level=1, past_bot_responses=None, user_gender='Prefer not to say'):
         """
         Generates a context-aware, intent-driven, non-repetitive counseling response.
 
@@ -179,6 +179,7 @@ class MindSenseChatbot:
             base_prompt = {
                 'response_style': random.choice(RESPONSE_STYLES),
                 'target_word_range': word_range_str,
+                'user_gender': user_gender,
                 'user_intent': detected_intent,
                 'detected_emotion': detected_emotion,
                 'context': context or "Use empathy, active listening, and evidence-based counseling.",
@@ -224,7 +225,7 @@ class MindSenseChatbot:
 
         # ── 5. FALLBACK (Only if LLM completely crashes) ────────
         if not bot_reply:
-            bot_reply = "I'm having a bit of trouble processing right now, but I want to make sure I understand. Could you share that with me again?"
+            bot_reply = "I'm currently experiencing high demand and having a bit of trouble processing right now, but I want to make sure I understand you. Could you share that with me again gently?"
 
         return {
             'bot_response': bot_reply,
@@ -269,8 +270,8 @@ class MindSenseChatbot:
 chatbot_instance = MindSenseChatbot()
 
 
-def get_chatbot_response(user_input, mode='mental', history_list=None, iq_level=1, past_bot_responses=None):
+def get_chatbot_response(user_input, mode='mental', history_list=None, iq_level=1, past_bot_responses=None, user_gender='Prefer not to say'):
     return chatbot_instance.generate_response(
         user_input, mode=mode, history_list=history_list,
-        iq_level=iq_level, past_bot_responses=past_bot_responses
+        iq_level=iq_level, past_bot_responses=past_bot_responses, user_gender=user_gender
     )

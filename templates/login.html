@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}MindSense-AI | Sign In & Register{% endblock %}
 
 {% block content %}
@@ -50,7 +50,7 @@
                 <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Email Address</label>
                 <div class="relative">
                     <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-envelope text-sm"></i></span>
-                    <input type="email" name="login_email" required placeholder="name@example.com"
+                    <input type="email" name="email" required placeholder="name@example.com"
                         class="w-full pl-10 pr-4 py-3 bg-white/60 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-white placeholder-slate-400 outline-none text-sm transition">
                 </div>
             </div>
@@ -59,7 +59,7 @@
                 <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Password</label>
                 <div class="relative">
                     <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-lock text-sm"></i></span>
-                    <input type="password" name="login_password" required placeholder="••••••••"
+                    <input type="password" name="password" required placeholder="••••••••"
                         class="w-full pl-10 pr-4 py-3 bg-white/60 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-white placeholder-slate-400 outline-none text-sm transition">
                 </div>
             </div>
@@ -83,8 +83,25 @@
                 <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Full Name</label>
                 <div class="relative">
                     <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-user text-sm"></i></span>
-                    <input type="text" name="name" placeholder="John Doe"
+                    <input type="text" name="name" required placeholder="John Doe"
                         class="w-full pl-10 pr-4 py-3 bg-white/60 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-white placeholder-slate-400 outline-none text-sm transition">
+                </div>
+            </div>
+
+            <div class="space-y-1.5">
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Gender</label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-venus-mars text-sm"></i></span>
+                    <select name="gender" required class="w-full pl-10 pr-4 py-3 bg-white/60 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-white outline-none text-sm transition appearance-none">
+                        <option value="" disabled selected>Select Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Prefer not to say">Prefer not to say</option>
+                    </select>
+                    <!-- Custom dropdown arrow -->
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                        <i class="fa-solid fa-chevron-down text-xs"></i>
+                    </div>
                 </div>
             </div>
 
@@ -92,7 +109,7 @@
                 <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Email Address</label>
                 <div class="relative">
                     <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-envelope text-sm"></i></span>
-                    <input type="email" name="reg_email" placeholder="adam1@gmail.com"
+                    <input type="email" name="email" required placeholder="adam1@gmail.com"
                         class="w-full pl-10 pr-4 py-3 bg-white/60 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-white placeholder-slate-400 outline-none text-sm transition">
                 </div>
             </div>
@@ -101,7 +118,7 @@
                 <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Password <span class="text-slate-400 font-normal">(min 6 chars)</span></label>
                 <div class="relative">
                     <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-lock text-sm"></i></span>
-                    <input type="password" name="reg_password" placeholder="••••••••"
+                    <input type="password" name="password" required placeholder="••••••••"
                         class="w-full pl-10 pr-4 py-3 bg-white/60 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-white placeholder-slate-400 outline-none text-sm transition">
                 </div>
             </div>

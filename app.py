@@ -4,11 +4,12 @@ from database.mongodb import init_db
 
 # Import modular blueprints
 from routes.auth import auth_bp
-from routes.chat import chat_bp
-from routes.iq import iq_bp
+from routes.counseling import chat_bp
+from routes.iq_test import iq_bp
 from routes.report import report_bp
 from routes.dashboard import dashboard_bp
 from routes.admin import admin_bp
+from routes.mental import mental_bp
 
 def create_app():
     app = Flask(__name__)
@@ -27,6 +28,7 @@ def create_app():
     app.register_blueprint(report_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(mental_bp)
 
     @app.route('/')
     def index():

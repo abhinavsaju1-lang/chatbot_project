@@ -46,6 +46,7 @@ def api_chat():
 
     user_email = session.get('user_email', 'guest@mindsense.ai')
     user_name = session.get('user_name', 'Guest User')
+    user_gender = session.get('user_gender', 'Prefer not to say')
 
     user_key = f"{user_email}_{mode}"
     if user_key not in TEMPORARY_CHAT_LOGS:
@@ -56,9 +57,9 @@ def api_chat():
     history_list = TEMPORARY_CHAT_LOGS[user_key]
     past_bot_responses = PAST_BOT_RESPONSES_WINDOW[user_key]
 
-    # Generate intent-driven, 3-5 sentence (<80 words) response
+    # Generate intent-driven, empathetic response
     ai_result = get_chatbot_response(
-        user_message, mode=mode, history_list=history_list, past_bot_responses=past_bot_responses
+        user_message, mode=mode, history_list=history_list, past_bot_responses=past_bot_responses, user_gender=user_gender
     )
 
     bot_response = ai_result['bot_response']
