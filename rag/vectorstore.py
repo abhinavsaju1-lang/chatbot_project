@@ -1,19 +1,26 @@
 import os
-from langchain_community.vectorstores import FAISS
-from ai.embeddings import get_embedding_model
-from rag.loader import load_and_split_documents
 from config import Config
 
 def get_or_create_vectorstore(data_dir=None, index_dir=None):
-    """Build or load existing FAISS vector store index."""
+    """
+    Build or load existing FAISS vector store index lazily.
+    Fails soft if FAISS or heavy dependencies are not installed.
+    """
     if index_dir is None:
         index_dir = Config.FAISS_INDEX_DIR
     if data_dir is None:
         data_dir = Config.DATA_DIR
 
+    try:
+        from langchain_community.vectorstores import FAISS
+        from ai.embeddings import get_embedding_model
+        from rag.loader import load_and_split_documents
+    except (ImportError, MemoryError) as e:
+        print(f"[FAISS Notice] FAISS dependencies not available ({e}).")
+        return None
+
     embeddings = get_embedding_model()
     if embeddings is None:
-        print("[FAISS Warning] Embeddings model not available.")
         return None
 
     # Check if index files exist

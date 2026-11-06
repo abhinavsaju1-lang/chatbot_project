@@ -233,7 +233,7 @@ This repository is optimized for deployment on [Render](https://render.com).
 2. Configure settings:
    - **Environment:** `Python 3`
    - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `gunicorn app:app`
+   - **Start Command:** `gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120 app:app`
 3. Add Environment Variables:
    - `SECRET_KEY`: `<Any strong random string>`
    - `GROQ_API_KEY`: `<Your Groq API Key>`
