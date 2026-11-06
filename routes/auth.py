@@ -1,19 +1,32 @@
 """
 auth.py — MindSense AI Authentication Routes
-Completely self-contained. Zero AI/LLM imports. Direct PyMongo calls only.
+Direct PyMongo calls with robust Atlas connection diagnostics.
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
 import traceback
 import sys
-from database.mongodb import mongo   # direct PyMongo instance — no helper wrappers
+from pymongo.errors import ServerSelectionTimeoutError, OperationFailure, ConfigurationError
+from database.mongodb import mongo, check_db_health, get_db
 
 auth_bp = Blueprint("auth", __name__)
 
 
 def _users():
-    """Return the raw PyMongo 'users' collection. Raises if DB is unavailable."""
-    return mongo.db.users
+    """Return the raw PyMongo 'users' collection or None if DB is unavailable."""
+    db = get_db()
+    if db is None:
+        return None
+    return db.users
+
+
+@auth_bp.route("/api/db-health", methods=["GET"])
+def db_health_check():
+    """Diagnostic endpoint to verify MongoDB Atlas connection on Render."""
+    health = check_db_health()
+    status_code = 200 if health.get("connected") else 503
+    return jsonify(health), status_code
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -26,7 +39,6 @@ def login():
 
         # ─── REGISTER ─────────────────────────────────────────────────────────
         if action == "register":
-            # EXACT field names from login.html  ─ do NOT change these keys
             name     = request.form.get("name", "").strip()
             gender   = request.form.get("gender", "Prefer not to say").strip()
             email    = request.form.get("email", "").strip().lower()
@@ -45,7 +57,7 @@ def login():
             try:
                 users_col = _users()
                 if users_col is None:
-                    raise Exception("Database collection (_users) is None. The database connection might not be established.")
+                    raise ConnectionError("Database instance is not initialized. Please verify your MONGO_URI in Render.")
 
                 existing = users_col.find_one({"email": email})
                 if existing:
@@ -56,18 +68,42 @@ def login():
                     "name":       name,
                     "gender":     gender,
                     "email":      email,
-                    # pbkdf2:sha256 — explicit algorithm so check_password_hash always matches
                     "password":   generate_password_hash(password, method="pbkdf2:sha256"),
                     "is_admin":   email.endswith("@mindsense.ai"),
-                    "created_at": "2026-08-01",
+                    "created_at": datetime.now().strftime("%Y-%m-%d"),
                 })
                 print(f"[Auth] Successfully inserted user: {email}. Inserted ID: {result.inserted_id}", flush=True)
+
+            except ServerSelectionTimeoutError as sste:
+                print(f"\n--- REGISTRATION DB TIMEOUT ERROR ---\n{sste}\n", file=sys.stderr, flush=True)
+                flash(
+                    "Database connection timed out! If deployed on Render, please go to MongoDB Atlas -> Network Access -> Add IP Address -> '0.0.0.0/0' (Allow access from anywhere).",
+                    "danger"
+                )
+                return render_template("login.html", active_tab="register")
+
+            except OperationFailure as of:
+                print(f"\n--- REGISTRATION DB AUTH ERROR ---\n{of}\n", file=sys.stderr, flush=True)
+                flash(
+                    "Database authentication failed. Please verify your MongoDB Atlas username and password in the MONGO_URI environment variable.",
+                    "danger"
+                )
+                return render_template("login.html", active_tab="register")
+
             except Exception as db_err:
-                print(f"\\n--- REGISTRATION ERROR ---", file=sys.stderr, flush=True)
-                print(f"[Auth] Registration DB error: {db_err}", file=sys.stderr, flush=True)
+                print(f"\n--- REGISTRATION DB ERROR ---", file=sys.stderr, flush=True)
+                print(f"[Auth] Registration error: {db_err}", file=sys.stderr, flush=True)
                 traceback.print_exc()
-                print(f"--------------------------\\n", file=sys.stderr, flush=True)
-                flash("Registration failed due to a database error. Please try again.", "danger")
+                print(f"-----------------------------\n", file=sys.stderr, flush=True)
+
+                err_str = str(db_err).lower()
+                if "timeout" in err_str or "connection" in err_str:
+                    flash(
+                        "Database connection failed. Ensure MongoDB Atlas Network Access allows connections from anywhere (0.0.0.0/0).",
+                        "danger"
+                    )
+                else:
+                    flash(f"Registration failed: {db_err}", "danger")
                 return render_template("login.html", active_tab="register")
 
             # ── Auto-login after successful registration ───────────────────────
@@ -80,7 +116,6 @@ def login():
 
         # ─── SIGN IN ──────────────────────────────────────────────────────────
         else:
-            # EXACT field names from login.html  ─ do NOT change these keys
             email    = request.form.get("email", "").strip().lower()
             password = request.form.get("password", "").strip()
 
@@ -92,14 +127,31 @@ def login():
             try:
                 users_col = _users()
                 if users_col is None:
-                    raise Exception("Database collection (_users) is None. The database connection might not be established.")
+                    raise ConnectionError("Database instance is not initialized. Please verify your MONGO_URI in Render.")
                 user = users_col.find_one({"email": email})
+
+            except ServerSelectionTimeoutError as sste:
+                print(f"\n--- LOGIN DB TIMEOUT ERROR ---\n{sste}\n", file=sys.stderr, flush=True)
+                flash(
+                    "Database connection timed out! If deployed on Render, please enable '0.0.0.0/0' (Allow access from anywhere) in MongoDB Atlas Network Access.",
+                    "danger"
+                )
+                return render_template("login.html", active_tab="login")
+
+            except OperationFailure as of:
+                print(f"\n--- LOGIN DB AUTH ERROR ---\n{of}\n", file=sys.stderr, flush=True)
+                flash(
+                    "Database authentication failed. Please check your MongoDB username and password in MONGO_URI.",
+                    "danger"
+                )
+                return render_template("login.html", active_tab="login")
+
             except Exception as db_err:
-                print(f"\\n--- LOGIN ERROR ---", file=sys.stderr, flush=True)
+                print(f"\n--- LOGIN ERROR ---", file=sys.stderr, flush=True)
                 print(f"[Auth] Login DB error: {db_err}", file=sys.stderr, flush=True)
                 traceback.print_exc()
-                print(f"-------------------\\n", file=sys.stderr, flush=True)
-                flash("Login failed due to a database error. Please try again.", "danger")
+                print(f"-------------------\n", file=sys.stderr, flush=True)
+                flash(f"Login failed due to database error: {db_err}", "danger")
                 return render_template("login.html", active_tab="login")
 
             if not user or not check_password_hash(user["password"], password):

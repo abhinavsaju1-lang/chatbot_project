@@ -1,6 +1,8 @@
 Flask>=3.0.0
 Flask-PyMongo>=2.3.0
-pymongo>=4.6.0
+pymongo[srv]>=4.6.0
+dnspython>=2.4.0
+certifi>=2023.7.22
 python-dotenv>=1.0.0
 langchain>=0.1.0
 langchain-groq>=0.1.0
