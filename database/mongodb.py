@@ -28,26 +28,30 @@ def init_db(app):
         return None
 
     try:
-        _client = MongoClient(
-            uri,
-            serverSelectionTimeoutMS=8000,
-            connectTimeoutMS=8000,
-            socketTimeoutMS=10000,
-            tls=True,                       # Atlas always requires TLS
-            tlsAllowInvalidCertificates=False,
-        )
+        client_kwargs = {
+            "serverSelectionTimeoutMS": 5000,
+            "connectTimeoutMS": 5000,
+            "socketTimeoutMS": 8000,
+        }
+        # Only enforce TLS if connection is Atlas SRV or explicitly requested
+        is_srv = uri.startswith("mongodb+srv://")
+        if is_srv or "ssl=true" in uri.lower() or "tls=true" in uri.lower():
+            client_kwargs["tls"] = True
+            client_kwargs["tlsAllowInvalidCertificates"] = False
+
+        _client = MongoClient(uri, **client_kwargs)
         # Verify the connection is live before the first request hits
         _client.admin.command('ping')
         # Parse DB name from URI (e.g. .../mindsense_db?appName=...)
         db_name = uri.split('/')[-1].split('?')[0] or 'mindsense_db'
         _db = _client[db_name]
-        print(f"[DB] Connected to MongoDB Atlas — database: '{db_name}'")
+        print(f"[DB] Connected to MongoDB — database: '{db_name}'")
         return _client
     except (ConnectionFailure, ServerSelectionTimeoutError) as e:
-        print(f"[DB] MongoDB connection FAILED: {e}")
+        print(f"[DB Warning] MongoDB connection FAILED: {e}. Running in degraded mode.")
         return None
     except Exception as e:
-        print(f"[DB] Unexpected MongoDB error during init: {e}")
+        print(f"[DB Warning] Unexpected MongoDB error during init: {e}")
         return None
 
 

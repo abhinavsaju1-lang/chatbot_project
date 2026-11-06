@@ -55,65 +55,71 @@ def start_iq_test():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        err_msg = "The AI assessment engine is currently busy or experiencing high traffic. Please try again in a few moments."
+        return jsonify({'success': False, 'error': err_msg, 'details': str(e)}), 500
 
 @iq_bp.route('/api/iq/next', methods=['POST'])
 def next_iq_question():
     """Evaluate submitted answer, return correct answer for 1s visual feedback, and queue next question."""
-    data = request.get_json() or {}
-    session_id = data.get('session_id')
-    user_answer = data.get('answer')
-    time_taken = data.get('time_taken', 15)
+    try:
+        data = request.get_json() or {}
+        session_id = data.get('session_id')
+        user_answer = data.get('answer')
+        time_taken = data.get('time_taken', 15)
 
-    if not session_id or session_id not in IQ_TEST_SESSIONS:
-        return jsonify({'success': False, 'error': 'Invalid test session.'}), 400
+        if not session_id or session_id not in IQ_TEST_SESSIONS:
+            return jsonify({'success': False, 'error': 'Invalid or expired test session. Please restart.'}), 400
 
-    test_state = IQ_TEST_SESSIONS[session_id]
-    current_q = test_state['current_question']
+        test_state = IQ_TEST_SESSIONS[session_id]
+        current_q = test_state['current_question']
 
-    # Evaluate correctness
-    is_correct = (user_answer == current_q['answer'])
-    if is_correct:
-        test_state['correct_count'] += 1
+        # Evaluate correctness
+        is_correct = (user_answer == current_q['answer'])
+        if is_correct:
+            test_state['correct_count'] += 1
 
-    test_state['responses'].append({
-        'question_id': current_q['id'],
-        'category': current_q['category'],
-        'difficulty': current_q['difficulty'],
-        'question': current_q['question'],
-        'user_answer': user_answer,
-        'correct_answer': current_q['answer'],
-        'is_correct': is_correct,
-        'time_taken': time_taken,
-        'explanation': current_q.get('explanation', '')
-    })
+        test_state['responses'].append({
+            'question_id': current_q['id'],
+            'category': current_q['category'],
+            'difficulty': current_q['difficulty'],
+            'question': current_q['question'],
+            'user_answer': user_answer,
+            'correct_answer': current_q['answer'],
+            'is_correct': is_correct,
+            'time_taken': time_taken,
+            'explanation': current_q.get('explanation', '')
+        })
 
-    test_state['question_index'] += 1
+        test_state['question_index'] += 1
 
-    # Check if completed
-    if test_state['question_index'] > test_state['total_questions']:
-        return finish_iq_test(session_id, current_q['answer'], is_correct)
+        # Check if completed
+        if test_state['question_index'] > test_state['total_questions']:
+            return finish_iq_test(session_id, current_q['answer'], is_correct)
 
-    # Fetch next question from memory
-    next_idx = test_state['question_index'] - 1
-    next_q = test_state['questions'][next_idx]
-    test_state['current_question'] = next_q
+        # Fetch next question from memory
+        next_idx = test_state['question_index'] - 1
+        next_q = test_state['questions'][next_idx]
+        test_state['current_question'] = next_q
 
-    return jsonify({
-        'success': True,
-        'session_id': session_id,
-        'is_correct': is_correct,
-        'correct_answer': current_q['answer'],
-        'next_question_data': {
-            'question_index': test_state['question_index'],
-            'total_questions': test_state['total_questions'],
-            'difficulty': next_q['difficulty'].capitalize(),
-            'category': next_q['category'],
-            'question': next_q['question'],
-            'options': next_q['options'],
-            'time_limit': 30
-        }
-    })
+        return jsonify({
+            'success': True,
+            'session_id': session_id,
+            'is_correct': is_correct,
+            'correct_answer': current_q['answer'],
+            'next_question_data': {
+                'question_index': test_state['question_index'],
+                'total_questions': test_state['total_questions'],
+                'difficulty': next_q['difficulty'].capitalize(),
+                'category': next_q['category'],
+                'question': next_q['question'],
+                'options': next_q['options'],
+                'time_limit': 30
+            }
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': 'Failed to process question response. Please try again.'}), 500
 
 def finish_iq_test(session_id, last_correct_answer, is_correct):
     """Complete test, calculate IQ score, percentile, and save report to MongoDB iq_reports."""

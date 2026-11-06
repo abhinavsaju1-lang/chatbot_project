@@ -1,8 +1,12 @@
 import json
-import json_repair
 import random
 import re
 from config import Config
+
+try:
+    import json_repair
+except ImportError:
+    json_repair = None
 
 def _extract_json_array(raw_text):
     """
@@ -12,26 +16,38 @@ def _extract_json_array(raw_text):
     print('=== RAW LLM OUTPUT START ===\n' + raw_text + '\n=== RAW LLM OUTPUT END ===', flush=True)
     
     # Strip markdown code blocks if the LLM included them
-    raw_text = raw_text.replace("```json", "").replace("```", "").strip()
+    cleaned_text = raw_text.replace("```json", "").replace("```", "").strip()
 
-    first_bracket = raw_text.find('[')
-    last_bracket = raw_text.rfind(']')
+    first_bracket = cleaned_text.find('[')
+    last_bracket = cleaned_text.rfind(']')
 
     if first_bracket != -1 and last_bracket != -1 and last_bracket > first_bracket:
-        cleaned_text = raw_text[first_bracket:last_bracket+1]
-    else:
-        cleaned_text = raw_text
+        cleaned_text = cleaned_text[first_bracket:last_bracket+1]
 
+    # Try json_repair first if available
+    if json_repair is not None:
+        try:
+            parsed = json_repair.loads(cleaned_text)
+            if isinstance(parsed, list):
+                return parsed
+        except Exception:
+            pass
+
+    # Standard json.loads
     try:
-        return json_repair.loads(cleaned_text)
-    except json.JSONDecodeError:
-        # Fallback: fix trailing commas and newlines inside strings
-        import re
+        return json.loads(cleaned_text)
+    except Exception:
+        # Fallback regex clean: fix trailing commas and newlines inside arrays/objects
         cleaned_text = re.sub(r',\s*\]', ']', cleaned_text)
         cleaned_text = re.sub(r',\s*\}', '}', cleaned_text)
         try:
-            return json_repair.loads(cleaned_text)
-        except json.JSONDecodeError as final_err:
+            return json.loads(cleaned_text)
+        except Exception as final_err:
+            if json_repair is not None:
+                try:
+                    return json_repair.loads(cleaned_text)
+                except Exception:
+                    pass
             raise ValueError(f"Failed to parse JSON from LLM output. Error: {final_err}")
 
 def generate_iq_test_batch():

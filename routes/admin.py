@@ -1,4 +1,4 @@
-﻿from flask import Blueprint, render_template, session, redirect, url_for, flash
+from flask import Blueprint, render_template, session, redirect, url_for, flash
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -65,10 +65,25 @@ def admin():
         flash("Please login to access the Admin Panel.", "warning")
         return redirect(url_for("auth.login"))
 
+    try:
+        from database.mongodb import get_all_users, get_all_reports, get_high_risk_users
+        real_users = get_all_users()
+        real_reports = get_all_reports()
+        real_high_risk = get_high_risk_users()
+
+        users = real_users if real_users else DUMMY_USERS
+        reports = real_reports if real_reports else DUMMY_REPORTS
+        high_risk_users = real_high_risk if real_high_risk else DUMMY_HIGH_RISK
+    except Exception as e:
+        print(f"[Admin] DB query exception: {e}")
+        users = DUMMY_USERS
+        reports = DUMMY_REPORTS
+        high_risk_users = DUMMY_HIGH_RISK
+
     return render_template(
         "admin.html",
-        users=DUMMY_USERS,
-        reports=DUMMY_REPORTS,
-        high_risk_users=DUMMY_HIGH_RISK,
+        users=users,
+        reports=reports,
+        high_risk_users=high_risk_users,
         search_query="",
     )

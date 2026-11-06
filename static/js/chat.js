@@ -23,6 +23,7 @@ async function handleChatSubmit(e) {
     e.preventDefault();
 
     const input = document.getElementById('user-input');
+    const sendBtn = document.getElementById('btn-send');
     const userMessage = input.value.trim();
     if (!userMessage) return;
 
@@ -32,6 +33,10 @@ async function handleChatSubmit(e) {
 
     input.value = '';
     input.disabled = true;
+    if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
+    }
 
     appendUserMessage(userMessage);
 
@@ -55,18 +60,26 @@ async function handleChatSubmit(e) {
         typingIndicator.classList.add('hidden');
         typingIndicator.classList.remove('flex');
         input.disabled = false;
+        if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
         input.focus();
 
         if (data.success) {
             appendBotMessage(data.response, data.emotion, data.intent, data.sentiment);
         } else {
-            appendBotMessage("I encountered an issue generating a response. Please try again.", "Neutral", "Error", null);
+            appendBotMessage(data.error || "I encountered an issue generating a response. Please try again.", "Neutral", "Notice", null);
         }
     } catch (err) {
         typingIndicator.classList.add('hidden');
         typingIndicator.classList.remove('flex');
         input.disabled = false;
-        appendBotMessage("Network error. Please check your connection.", "Neutral", "Error", null);
+        if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+        appendBotMessage("Network error. Please check your connection.", "Neutral", "Notice", null);
     }
 }
 

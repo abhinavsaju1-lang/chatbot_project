@@ -19,14 +19,18 @@ def mental_check():
         return render_template('mental_check.html', initial_message=initial_message, user_name=user_name)
 
     if request.method == 'POST':
-        data = request.get_json() or {}
-        user_answer = data.get('message', '').strip()
-        current_step = session.get('mental_step', 1)
-        
-        response_text, next_step = process_mental_step(current_step, user_answer)
-        session['mental_step'] = next_step
-        
-        return jsonify({'success': True, 'response': response_text, 'step': next_step})
+        try:
+            data = request.get_json() or {}
+            user_answer = data.get('message', '').strip()
+            current_step = session.get('mental_step', 1)
+            
+            response_text, next_step = process_mental_step(current_step, user_answer)
+            session['mental_step'] = next_step
+            
+            return jsonify({'success': True, 'response': response_text, 'step': next_step})
+        except Exception as e:
+            print(f"[Mental Check Route Error] {e}")
+            return jsonify({'success': False, 'error': 'Could not record assessment step. Please try again.'}), 500
 
 def process_mental_step(step, answer):
     if step == 1:

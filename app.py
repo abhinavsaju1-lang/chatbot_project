@@ -34,6 +34,14 @@ def create_app():
     def index():
         return render_template('index.html')
 
+    @app.errorhandler(404)
+    def handle_404(e):
+        return render_template('404.html'), 404
+
+    @app.errorhandler(500)
+    def handle_500(e):
+        return render_template('500.html'), 500
+
     return app
 app = create_app()
 

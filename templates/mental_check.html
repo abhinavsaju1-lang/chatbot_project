@@ -95,11 +95,20 @@
     async function handleChatSubmit(event) {
         event.preventDefault();
         const message = userInput.value.trim();
+        const sendBtn = document.getElementById('btn-send');
         if (!message) return;
 
         appendUserMessage(message);
         userInput.value = '';
+        userInput.disabled = true;
+        if (sendBtn) {
+            sendBtn.disabled = true;
+            sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+
         typingIndicator.classList.remove('hidden');
+        typingIndicator.classList.add('flex');
+        chatContainer.scrollTop = chatContainer.scrollHeight;
 
         try {
             const response = await fetch('/mental-check', {
@@ -110,17 +119,37 @@
             const data = await response.json();
             
             typingIndicator.classList.add('hidden');
+            typingIndicator.classList.remove('flex');
+
             if (data.success) {
                 appendBotMessage(data.response);
                 if (data.step >= 9) {
                     userInput.disabled = true;
-                    document.getElementById('btn-send').disabled = true;
+                    if (sendBtn) sendBtn.disabled = true;
+                } else {
+                    userInput.disabled = false;
+                    if (sendBtn) {
+                        sendBtn.disabled = false;
+                        sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    }
+                    userInput.focus();
                 }
             } else {
-                appendBotMessage("An error occurred. Please try again.");
+                appendBotMessage(data.error || "An error occurred. Please try again.");
+                userInput.disabled = false;
+                if (sendBtn) {
+                    sendBtn.disabled = false;
+                    sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
             }
         } catch (error) {
             typingIndicator.classList.add('hidden');
+            typingIndicator.classList.remove('flex');
+            userInput.disabled = false;
+            if (sendBtn) {
+                sendBtn.disabled = false;
+                sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
             appendBotMessage("Network error. Please check your connection.");
         }
     }
