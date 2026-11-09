@@ -63,14 +63,13 @@ def generate_iq_test_batch():
         print("[IQ Generator] No valid Groq API key found. Using balanced question bank fallback.")
         return get_fallback_iq_batch()
 
-    # Model priority cascade: Try configured primary (70b), fallback to ultra-fast 8b-instant
+    # Model priority cascade: Try configured primary, fallback models
     primary_model = Config.GROQ_MODEL
-    fallback_model = getattr(Config, 'GROQ_FALLBACK_MODEL', 'llama-3.1-8b-instant')
-    models_to_try = [primary_model]
-    if fallback_model not in models_to_try:
-        models_to_try.append(fallback_model)
-    if "llama-3.1-8b-instant" not in models_to_try:
-        models_to_try.append("llama-3.1-8b-instant")
+    fallback_model = getattr(Config, 'GROQ_FALLBACK_MODEL', 'llama-3.3-70b-versatile')
+    models_to_try = []
+    for m in [primary_model, fallback_model, "qwen/qwen3.8-27b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "allam-2-7b"]:
+        if m and m not in models_to_try:
+            models_to_try.append(m)
 
     timeout_sec = getattr(Config, 'GROQ_TIMEOUT', 25)
 
@@ -129,11 +128,15 @@ Each object must follow this exact JSON structure:
                     err_str = str(call_err).lower()
                     print(f"[IQ Generator Retry {attempt+1}/{max_attempts} on {model_name}] Warning: {call_err}")
 
+                    is_model_not_found = "model_not_found" in err_str or "does not exist" in err_str or "404" in err_str
                     # If rate limit (429) or high demand (503), apply exponential backoff
                     if "rate limit" in err_str or "429" in err_str or "high demand" in err_str or "capacity" in err_str:
                         backoff = (2.0 ** attempt) + random.uniform(0.3, 0.7)
                         print(f"[IQ Generator] Rate limit detected. Backing off for {backoff:.2f}s...")
                         time.sleep(backoff)
+                    elif is_model_not_found:
+                        print(f"[IQ Generator Failover] Model {model_name} not available. Fast-failing over to next model...")
+                        break
                     else:
                         time.sleep(0.5)
 

@@ -269,13 +269,12 @@ class MindSenseChatbot:
                 'user_input': user_input
             }
 
-            candidate_models = [self.model_name]
-            if self.fallback_model and self.fallback_model not in candidate_models:
-                candidate_models.append(self.fallback_model)
-            if "llama-3.1-8b-instant" not in candidate_models:
-                candidate_models.append("llama-3.1-8b-instant")
+            candidate_models = []
+            for m in [self.model_name, self.fallback_model, "qwen/qwen3.8-27b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "allam-2-7b"]:
+                if m and m not in candidate_models:
+                    candidate_models.append(m)
 
-            max_retries = 3
+            max_retries = min(len(candidate_models), 4)
 
             for attempt in range(max_retries):
                 target_model = candidate_models[min(attempt, len(candidate_models) - 1)]
@@ -311,14 +310,21 @@ class MindSenseChatbot:
                     err_str = str(e).lower()
                     print(f"[LLM Error] Attempt {attempt + 1} ({target_model}): {e}")
 
-                    # Check for rate limits or high-demand / capacity errors
+                    # Check for model not found (404) vs rate limit (429/503)
+                    is_model_not_found = "model_not_found" in err_str or "does not exist" in err_str or "404" in err_str
                     is_rate_limit = any(term in err_str for term in ['429', 'rate_limit', 'capacity', '503', 'resource_exhausted', 'tokens per minute', 'tpm'])
+
                     if attempt < max_retries - 1:
-                        backoff_sec = (1.5 ** attempt) + random.uniform(0.2, 0.5)
                         if is_rate_limit:
+                            backoff_sec = (1.5 ** attempt) + random.uniform(0.2, 0.5)
                             next_model = candidate_models[min(attempt + 1, len(candidate_models) - 1)]
-                            print(f"[ChatGroq Backoff] Rate limit or high capacity detected. Backing off {backoff_sec:.2f}s and cascading to {next_model}...")
-                        time.sleep(backoff_sec)
+                            print(f"[ChatGroq Backoff] Rate limit on {target_model}. Backing off {backoff_sec:.2f}s and cascading to {next_model}...")
+                            time.sleep(backoff_sec)
+                        elif is_model_not_found:
+                            next_model = candidate_models[min(attempt + 1, len(candidate_models) - 1)]
+                            print(f"[ChatGroq Failover] Model {target_model} not accessible. Instantly switching to {next_model}...")
+                        else:
+                            time.sleep(0.3)
 
             # Always prefer the LLM's last output if valid
             if not bot_reply and last_candidate:
