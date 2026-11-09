@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, jsonify, session
 from datetime import datetime
 import uuid
 from database.mongodb import save_mental_report
+from ai.chatbot import is_crisis_intent, get_crisis_response
 
 mental_bp = Blueprint('mental', __name__)
 
@@ -24,6 +25,11 @@ def mental_check():
             user_answer = data.get('message', '').strip()
             current_step = session.get('mental_step', 1)
             
+            # Immediate crisis intervention check
+            if is_crisis_intent(user_answer):
+                crisis_msg = get_crisis_response(user_name=user_name)
+                return jsonify({'success': True, 'response': crisis_msg, 'step': current_step, 'is_crisis': True})
+
             response_text, next_step = process_mental_step(current_step, user_answer)
             session['mental_step'] = next_step
             

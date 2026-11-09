@@ -24,13 +24,61 @@ BLACKLISTED_OPENINGS = [
 ]
 
 # ============================================================
-# INTENT DETECTION — 12 clinical intent categories
+# CRISIS & SELF-HARM SAFETY PROTOCOL
+# ============================================================
+CRISIS_TRIGGERS = [
+    r'\bsuicid(e|al|ing)?\b',
+    r'\bkill(ing)?\s+(my\s*self|me)\b',
+    r'\bself[- ]?harm(ing)?\b',
+    r'\b(harm|hurt)(ing)?\s+my\s*self\b',
+    r'\bend(ing)?\s+(my\s*life|it\s*all)\b',
+    r'\b(want|wanna)\s+to\s+die\b',
+    r'\bwish\s+(i\s*was|i\s*were)\s+dead\b',
+    r'\bbetter\s+off\s+dead\b',
+    r'\btake\s+my\s+(own\s+)?life\b',
+    r'\b(slit|cut)\s+(my\s*wrist|my\s*wrists|my\s*throat)\b',
+    r'\bhang\s+my\s*self\b',
+    r'\boverdose\b',
+    r'\b(no\s+reason\s+to\s+live|don\'?t\s+want\s+to\s+live)\b',
+    r'\b(can\'?t|cannot)\s+go\s+on\s+living\b'
+]
+
+def is_crisis_intent(text):
+    """Detect acute crisis, suicide, or self-harm triggers from user input."""
+    if not text:
+        return False
+    lower_text = text.lower()
+    for pattern in CRISIS_TRIGGERS:
+        if re.search(pattern, lower_text):
+            return True
+    return False
+
+def get_crisis_response(user_name='there'):
+    """Return a warm, urgent, non-judgmental crisis intervention message with 24/7 helplines."""
+    name_salutation = f", {user_name}" if user_name and user_name != 'Guest User' else ""
+    return (
+        f"I can hear how much pain and distress you are carrying right now{name_salutation}, but please know that you do not have to walk through this alone. Your life has immense value, and there is compassionate, confidential help available right now.\n\n"
+        "Please connect immediately with someone trained and ready to support you through this moment:\n\n"
+        "• **Tele-MANAS (24/7 National Mental Health Helpline, Toll-Free):** **14416** or **1800-891-4416**\n"
+        "• **KIRAN Mental Health Helpline (Govt of India, 24/7):** **1800-599-0019**\n"
+        "• **Vandrevala Foundation (24/7 Free Helpline & WhatsApp):** **+91 9999 666 555**\n"
+        "• **National Emergency Services:** **112** (Police & Medical Emergency)\n"
+        "• **International / Global Support:** Call or text **988** (US/Canada), or visit **findahelpline.com** for free, confidential crisis support in your country.\n\n"
+        "Please reach out to one of these services right now, or contact a trusted friend, family member, or healthcare professional. Please stay safe — I am here with you, and there is help available."
+    )
+
+# ============================================================
+# INTENT DETECTION — 13 clinical intent categories
 # ============================================================
 def detect_user_intent(text):
     """Detect specific user intent from conversation input using word boundaries."""
     if not text:
         return 'General'
     lower_text = text.lower()
+
+    # 1. Immediate Crisis / Self-Harm check
+    if is_crisis_intent(text):
+        return 'Crisis'
 
     def has_keyword(keywords):
         return any(re.search(r'\b' + re.escape(k) + r'\b', lower_text) for k in keywords)
@@ -163,6 +211,23 @@ class MindSenseChatbot:
 
         # ── 1. INTENT, EMOTION & WORD BOUND DETERMINATION ──────────────────
         detected_intent = detect_user_intent(user_input)
+
+        # ── IMMEDIATE CRISIS INTERVENTION OVERRIDE ─────────────────────────
+        if detected_intent == 'Crisis' or is_crisis_intent(user_input):
+            crisis_reply = get_crisis_response(user_name=user_name)
+            return {
+                'bot_response': crisis_reply,
+                'mode': mode,
+                'intent': 'Crisis',
+                'emotion': 'High Risk',
+                'sentiment': {
+                    'emotion': 'High Risk',
+                    'sentiment': {'positive': 0, 'negative': 95, 'neutral': 5},
+                    'scores': {'stress': 95, 'anxiety': 95, 'depression': 95, 'overall': 95}
+                },
+                'context_used': 'Crisis Intervention Protocol Triggered'
+            }
+
         sentiment_analysis = analyze_sentiment_and_emotion(user_input)
         detected_emotion = sentiment_analysis['emotion']
         min_words, max_words, word_range_str = determine_target_word_bounds(user_input)
@@ -273,8 +338,11 @@ class MindSenseChatbot:
         }
 
     def _get_mode_fallback(self, mode, user_input, detected_intent, detected_emotion, user_name='Guest User', user_gender='Prefer not to say'):
-        """Provide a supportive, mode-specific empathetic fallback or direct profile answer if LLM capacity is unavailable."""
+        """Provide a supportive, mode-specific empathetic fallback, crisis guidance, or direct profile answer if LLM capacity is unavailable."""
         lower_input = (user_input or '').lower()
+        if detected_intent == 'Crisis' or is_crisis_intent(user_input):
+            return get_crisis_response(user_name=user_name)
+
         if detected_intent == 'Profile Query' or any(k in lower_input for k in ['gender', 'my name', 'who am i', 'my profile', 'my account', 'my email', 'whats my', 'what is my']):
             gender_display = user_gender if user_gender and user_gender.strip() else 'Prefer not to say'
             name_display = user_name if user_name and user_name.strip() else 'Guest User'

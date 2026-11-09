@@ -103,11 +103,14 @@ function appendBotMessage(botMsg, emotion, intent, sentiment) {
     const wrapper = document.createElement('div');
     wrapper.className = 'flex items-start gap-3 space-y-1 animate-fade-slide';
 
-    // Render newlines as <br> for multi-sentence responses
-    const formattedMsg = escapeHtml(botMsg).replace(/\n/g, '<br>');
+    // Render bold markdown and newlines for readable responses
+    const formattedMsg = escapeHtml(botMsg)
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n/g, '<br>');
 
+    const isCrisis = intent === 'Crisis';
     const intentBadge = intent && intent !== 'General'
-        ? `<span class="px-2 py-0.5 bg-sky-500/10 text-sky-600 dark:text-sky-400 rounded-md font-semibold text-[10px]">Intent: ${escapeHtml(intent)}</span>`
+        ? `<span class="px-2 py-0.5 ${isCrisis ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 font-bold' : 'bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold'} rounded-md text-[10px]">Intent: ${escapeHtml(intent)}</span>`
         : '';
 
     const sentimentBadge = sentiment

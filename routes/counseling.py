@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, session
 from datetime import datetime
 from bson import ObjectId
-from ai.chatbot import get_chatbot_response
+from ai.chatbot import get_chatbot_response, is_crisis_intent, get_crisis_response
 from database.mongodb import (
     get_db,
     get_user_by_email,
@@ -193,20 +193,30 @@ def api_chat():
         import traceback
         traceback.print_exc()
         print(f"[Counseling Route Error] {e}")
-        fallback_reply = (
-            "I'm here with you, and what you're sharing matters. We hit a momentary processing delay, "
-            "but I want to understand. Could you please share that with me once more?"
-        )
+        if 'user_message' in locals() and is_crisis_intent(user_message):
+            fallback_reply = get_crisis_response(user_name=user_name if 'user_name' in locals() else 'there')
+            crisis_intent = 'Crisis'
+            crisis_emotion = 'High Risk'
+            crisis_scores = {'stress': 95, 'anxiety': 95, 'depression': 95, 'overall': 95}
+        else:
+            fallback_reply = (
+                "I'm here with you, and what you're sharing matters. We hit a momentary processing delay, "
+                "but I want to understand. Could you please share that with me once more?"
+            )
+            crisis_intent = 'General'
+            crisis_emotion = 'Supportive'
+            crisis_scores = {'stress': 50, 'anxiety': 30, 'depression': 30, 'overall': 40}
+
         return jsonify({
             'success': True,
             'mode': mode if 'mode' in locals() else 'mental',
             'message': user_message if 'user_message' in locals() else '',
             'response': fallback_reply,
-            'intent': 'General',
-            'emotion': 'Supportive',
-            'sentiment': {'compound': 0.0, 'pos': 0.0, 'neu': 1.0, 'neg': 0.0},
-            'scores': {'stress': 50, 'anxiety': 30, 'depression': 30, 'overall': 40},
-            'rag_context': None
+            'intent': crisis_intent,
+            'emotion': crisis_emotion,
+            'sentiment': {'compound': -0.9 if crisis_intent == 'Crisis' else 0.0, 'pos': 0.0, 'neu': 0.1, 'neg': 0.9 if crisis_intent == 'Crisis' else 0.0},
+            'scores': crisis_scores,
+            'rag_context': 'Crisis Intervention Protocol' if crisis_intent == 'Crisis' else None
         })
 
 @chat_bp.route('/api/chat/clear', methods=['POST'])
