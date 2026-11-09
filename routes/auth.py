@@ -8,7 +8,7 @@ from datetime import datetime
 import traceback
 import sys
 from pymongo.errors import ServerSelectionTimeoutError, OperationFailure, ConfigurationError
-from database.mongodb import mongo, check_db_health, get_db
+from database.mongodb import mongo, check_db_health, get_db, get_db_error
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -57,7 +57,8 @@ def login():
             try:
                 users_col = _users()
                 if users_col is None:
-                    raise ConnectionError("Database instance is not initialized. Please verify your MONGO_URI in Render.")
+                    db_detail = get_db_error() or "Database instance is not initialized. Please verify your MONGO_URI in Render."
+                    raise ConnectionError(f"Database unavailable: {db_detail}")
 
                 existing = users_col.find_one({"email": email})
                 if existing:
@@ -127,7 +128,8 @@ def login():
             try:
                 users_col = _users()
                 if users_col is None:
-                    raise ConnectionError("Database instance is not initialized. Please verify your MONGO_URI in Render.")
+                    db_detail = get_db_error() or "Database instance is not initialized. Please verify your MONGO_URI in Render."
+                    raise ConnectionError(f"Database unavailable: {db_detail}")
                 user = users_col.find_one({"email": email})
 
             except ServerSelectionTimeoutError as sste:

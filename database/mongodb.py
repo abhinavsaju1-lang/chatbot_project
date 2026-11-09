@@ -3,16 +3,53 @@ import certifi
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError, OperationFailure, ConfigurationError
 
+# Fix for dnspython on Windows / Docker / Render containers where system nameservers list is empty
+try:
+    import dns.resolver
+    resolver = dns.resolver.get_default_resolver()
+    if not resolver.nameservers:
+        resolver.nameservers = ['8.8.8.8', '1.1.1.1', '8.8.4.4']
+    resolver.timeout = 2.0
+    resolver.lifetime = 4.0
+except Exception:
+    pass
+
 # Module-level globals
 _client = None
 _db     = None
 _last_error = None
 
+def get_db_error():
+    """Returns the last encountered MongoDB initialization or connection error."""
+    global _last_error
+    return _last_error
+
 def get_db():
-    """Lazily retrieves the database instance, reconnecting if needed."""
+    """
+    Lazily retrieves the database instance, reconnecting if needed.
+    Checks Flask application context first, then module globals.
+    """
     global _client, _db
+
+    # 1. Return cached active database instance if already available
     if _db is not None:
         return _db
+
+    # 2. Check Flask application context if running inside request
+    try:
+        from flask import current_app, has_app_context
+        if has_app_context():
+            if hasattr(current_app, "mongo_db") and current_app.mongo_db is not None:
+                _db = current_app.mongo_db
+                return _db
+            # Try initializing with current_app
+            init_db(current_app)
+            if _db is not None:
+                return _db
+    except Exception:
+        pass
+
+    # 3. Fallback: Initialize directly
     init_db()
     return _db
 
@@ -27,21 +64,32 @@ mongo = _MongoProxy()
 def init_db(app=None):
     """
     Connect to MongoDB Atlas using raw MongoClient with TLS & certifi.
-    Does NOT throw unhandled exceptions, logs diagnostics clearly.
+    Binds the client and database to both module globals and app context.
     """
     global _client, _db, _last_error
 
     uri = ""
-    if app:
-        uri = app.config.get('MONGO_URI', '')
+    if app is not None and hasattr(app, "config"):
+        uri = app.config.get('MONGO_URI', '') or app.config.get('MONGODB_URI', '')
     if not uri:
-        uri = os.getenv("MONGO_URI", "")
+        uri = os.getenv("MONGO_URI", "") or os.getenv("MONGODB_URI", "")
+    if not uri:
+        try:
+            from flask import current_app, has_app_context
+            if has_app_context() and hasattr(current_app, "config"):
+                uri = current_app.config.get('MONGO_URI', '') or current_app.config.get('MONGODB_URI', '')
+        except Exception:
+            pass
     if not uri:
         try:
             from config import Config
             uri = Config.MONGO_URI
         except Exception:
             pass
+
+    # Sanitize URI string (strip accidental whitespace or wrapping quotes from Render dashboard)
+    if uri:
+        uri = uri.strip().strip("'\"").strip()
 
     if not uri:
         _last_error = "MONGO_URI is not set in environment or config."
@@ -50,8 +98,8 @@ def init_db(app=None):
 
     try:
         client_kwargs = {
-            "serverSelectionTimeoutMS": 6000,
-            "connectTimeoutMS": 6000,
+            "serverSelectionTimeoutMS": 7000,
+            "connectTimeoutMS": 7000,
             "socketTimeoutMS": 10000,
             "retryWrites": True,
         }
@@ -60,9 +108,20 @@ def init_db(app=None):
         is_srv = uri.startswith("mongodb+srv://")
         if is_srv or "ssl=true" in uri.lower() or "tls=true" in uri.lower():
             client_kwargs["tls"] = True
-            client_kwargs["tlsCAFile"] = certifi.where()
+            try:
+                client_kwargs["tlsCAFile"] = certifi.where()
+            except Exception:
+                pass
 
-        _client = MongoClient(uri, **client_kwargs)
+        try:
+            _client = MongoClient(uri, **client_kwargs)
+        except Exception as client_init_err:
+            # If failed with tlsCAFile, retry without it as fallback
+            if "tlsCAFile" in client_kwargs:
+                client_kwargs.pop("tlsCAFile", None)
+                _client = MongoClient(uri, **client_kwargs)
+            else:
+                raise client_init_err
 
         # Parse or determine the database name cleanly
         try:
@@ -71,13 +130,24 @@ def init_db(app=None):
             _db = None
 
         if _db is None:
-            clean_uri = uri.split('?')[0].rstrip('/')
-            db_name = clean_uri.split('/')[-1] if '/' in clean_uri else 'mindsense_db'
-            if not db_name or db_name.startswith("mongodb"):
-                db_name = 'mindsense_db'
-            _db = _client[db_name]
+            try:
+                clean_uri = uri.split('?')[0].rstrip('/')
+                db_name = clean_uri.split('/')[-1] if '/' in clean_uri else 'mindsense_db'
+                if not db_name or db_name.startswith("mongodb"):
+                    db_name = 'mindsense_db'
+                _db = _client[db_name]
+            except Exception:
+                _db = _client['mindsense_db']
 
-        # Verify cluster connectivity
+        # Bind to Flask app object if provided
+        if app is not None:
+            app.mongo_client = _client
+            app.mongo_db = _db
+            if not hasattr(app, "extensions"):
+                app.extensions = {}
+            app.extensions["mongodb"] = _db
+
+        # Test cluster connectivity
         try:
             _client.admin.command('ping')
             _last_error = None
@@ -95,6 +165,7 @@ def init_db(app=None):
             print(f"[DB Warning] MongoDB ping check failed: {ping_err}")
 
         return _client
+
     except Exception as e:
         _last_error = str(e)
         print(f"[DB Error] Failed to initialize MongoClient: {e}")

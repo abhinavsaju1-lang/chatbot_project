@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template
 from config import Config
 from database.mongodb import init_db
