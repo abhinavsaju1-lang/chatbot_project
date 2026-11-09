@@ -108,6 +108,7 @@ def login():
                 return render_template("login.html", active_tab="register")
 
             # ── Auto-login after successful registration ───────────────────────
+            session["user_id"]     = str(result.inserted_id)
             session["user_email"]  = email
             session["user_name"]   = name
             session["user_gender"] = gender
@@ -160,6 +161,7 @@ def login():
                 flash("Invalid email or password.", "danger")
                 return render_template("login.html", active_tab="login")
 
+            session["user_id"]     = str(user["_id"])
             session["user_email"]  = user["email"]
             session["user_name"]   = user["name"]
             session["user_gender"] = user.get("gender", "Prefer not to say")

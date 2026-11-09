@@ -1,7 +1,16 @@
 from flask import Blueprint, render_template, request, jsonify, session
 from datetime import datetime
+from bson import ObjectId
 from ai.chatbot import get_chatbot_response
-from database.mongodb import save_chat_session, get_user_chat_history, clear_user_chat_history, save_mental_report, save_relationship_report
+from database.mongodb import (
+    get_db,
+    get_user_by_email,
+    save_chat_session,
+    get_user_chat_history,
+    clear_user_chat_history,
+    save_mental_report,
+    save_relationship_report
+)
 from ai.report_generator import generate_session_report
 
 chat_bp = Blueprint('chat', __name__)
@@ -10,11 +19,54 @@ chat_bp = Blueprint('chat', __name__)
 TEMPORARY_CHAT_LOGS = {}
 PAST_BOT_RESPONSES_WINDOW = {}
 
+def get_current_user_profile():
+    """
+    Fetches the profile for the currently logged in user directly from MongoDB.
+    Checks session['user_id'] or session['user_email'], queries MongoDB,
+    and returns a normalized dict with name, gender, email, and user_id.
+    """
+    user_email = session.get('user_email')
+    user_id = session.get('user_id')
+    user_doc = None
+
+    try:
+        db = get_db()
+        if db is not None:
+            if user_id:
+                try:
+                    user_doc = db.users.find_one({"_id": ObjectId(user_id)})
+                except Exception:
+                    pass
+            if not user_doc and user_email:
+                user_doc = db.users.find_one({"email": user_email.lower().strip()})
+    except Exception as e:
+        print(f"[Counseling DB Profile Warning] {e}")
+
+    # Resolve values with session fallbacks
+    name = (user_doc.get('name') if user_doc else None) or session.get('user_name') or 'Guest User'
+    email = (user_doc.get('email') if user_doc else None) or user_email or 'guest@mindsense.ai'
+    gender = (user_doc.get('gender') if user_doc else None) or session.get('user_gender') or 'Prefer not to say'
+
+    # Keep session keys synchronized
+    session['user_name'] = name
+    session['user_email'] = email
+    session['user_gender'] = gender
+    if user_doc and '_id' in user_doc:
+        session['user_id'] = str(user_doc['_id'])
+
+    return {
+        'name': name,
+        'email': email,
+        'gender': gender,
+        'user_id': session.get('user_id', email)
+    }
+
 @chat_bp.route('/chat', methods=['GET'])
 def chat_page():
     mode = request.args.get('mode', 'mental')
-    user_email = session.get('user_email', 'guest@mindsense.ai')
-    user_name = session.get('user_name', 'Guest User')
+    profile = get_current_user_profile()
+    user_email = profile['email']
+    user_name = profile['name']
 
     user_key = f"{user_email}_{mode}"
 
@@ -45,9 +97,10 @@ def api_chat():
         if not user_message:
             return jsonify({'success': False, 'error': 'Message cannot be empty.'}), 400
 
-        user_email = session.get('user_email', 'guest@mindsense.ai')
-        user_name = session.get('user_name', 'Guest User')
-        user_gender = session.get('user_gender', 'Prefer not to say')
+        profile = get_current_user_profile()
+        user_email = profile['email']
+        user_name = profile['name']
+        user_gender = profile['gender']
 
         user_key = f"{user_email}_{mode}"
         if user_key not in TEMPORARY_CHAT_LOGS:
@@ -58,9 +111,15 @@ def api_chat():
         history_list = TEMPORARY_CHAT_LOGS[user_key]
         past_bot_responses = PAST_BOT_RESPONSES_WINDOW[user_key]
 
-        # Generate intent-driven, empathetic response
+        # Generate intent-driven, empathetic response with dynamic profile injection
         ai_result = get_chatbot_response(
-            user_message, mode=mode, history_list=history_list, past_bot_responses=past_bot_responses, user_gender=user_gender
+            user_message,
+            mode=mode,
+            history_list=history_list,
+            past_bot_responses=past_bot_responses,
+            user_gender=user_gender,
+            user_name=user_name,
+            user_email=user_email
         )
 
         bot_response = ai_result['bot_response']

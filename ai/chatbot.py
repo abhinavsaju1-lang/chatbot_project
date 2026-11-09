@@ -35,6 +35,11 @@ def detect_user_intent(text):
     def has_keyword(keywords):
         return any(re.search(r'\b' + re.escape(k) + r'\b', lower_text) for k in keywords)
 
+    # Check Profile Query
+    if has_keyword(['gender', 'who am i', 'my name', 'my profile', 'my account', 'my email']) or \
+       any(p in lower_text for p in ['what is my gender', "what's my gender", 'whats my gender', 'what is my name', "what's my name", 'whats my name', 'who am i', 'what is my email', 'my registered gender']):
+        return 'Profile Query'
+
     # Check Grief first
     if has_keyword(['grief', 'passed away', 'died', 'loss', 'funeral', 'miss them', 'death']):
         return 'Grief'
@@ -136,21 +141,25 @@ class MindSenseChatbot:
             except Exception as e:
                 print(f"[ChatGroq Warning] Could not initialize ChatGroq: {e}")
 
-    def generate_response(self, user_input, mode='mental', history_list=None, iq_level=1, past_bot_responses=None, user_gender='Prefer not to say'):
+    def generate_response(self, user_input, mode='mental', history_list=None, iq_level=1, past_bot_responses=None, user_gender='Prefer not to say', user_name='Guest User', user_email='guest@mindsense.ai', **kwargs):
         """
         Generates a context-aware, intent-driven, non-repetitive counseling response.
 
         Anti-repetition & High-Availability strategy:
-        1. Tracks past 7 bot responses in memory window.
-        2. Compares new response against history with SequenceMatcher (threshold 60%).
-        3. Cascades through fallback models (70B -> 8B-instant) on rate limit / capacity errors.
-        4. Applies exponential backoff with jitter on 429/503 errors.
-        5. Strips blacklisted opening phrases.
-        6. Enforces dynamic word limit at sentence boundaries.
-        7. Returns warm, mode-specific empathetic fallback if API is unreachable.
+        1. Injects dynamic user profile details (Name, Gender, Email) into LLM system prompt.
+        2. Tracks past 7 bot responses in memory window.
+        3. Compares new response against history with SequenceMatcher (threshold 60%).
+        4. Cascades through fallback models (70B -> 8B-instant) on rate limit / capacity errors.
+        5. Applies exponential backoff with jitter on 429/503 errors.
+        6. Strips blacklisted opening phrases.
+        7. Enforces dynamic word limit at sentence boundaries.
+        8. Returns warm, mode-specific empathetic fallback if API is unreachable.
         """
         history_list = history_list or []
         past_bot_responses = past_bot_responses or []
+        user_name = kwargs.get('user_name', user_name) or 'Guest User'
+        user_gender = kwargs.get('user_gender', user_gender) or 'Prefer not to say'
+        user_email = kwargs.get('user_email', user_email) or 'guest@mindsense.ai'
 
         # ── 1. INTENT, EMOTION & WORD BOUND DETERMINATION ──────────────────
         detected_intent = detect_user_intent(user_input)
@@ -183,9 +192,11 @@ class MindSenseChatbot:
         if self.api_key and not self.api_key.startswith("gsk_placeholder") and mode != 'iq':
             prompt_template = get_prompt_for_mode(mode)
             base_prompt = {
+                'user_name': user_name,
+                'user_gender': user_gender,
+                'user_email': user_email,
                 'response_style': random.choice(RESPONSE_STYLES),
                 'target_word_range': word_range_str,
-                'user_gender': user_gender,
                 'user_intent': detected_intent,
                 'detected_emotion': detected_emotion,
                 'context': context or "Use empathy, active listening, and evidence-based counseling.",
@@ -250,7 +261,7 @@ class MindSenseChatbot:
 
         # ── 5. EMPATHETIC MODE FALLBACK (If LLM is completely unreachable) ──
         if not bot_reply:
-            bot_reply = self._get_mode_fallback(mode, user_input, detected_intent, detected_emotion)
+            bot_reply = self._get_mode_fallback(mode, user_input, detected_intent, detected_emotion, user_name=user_name, user_gender=user_gender)
 
         return {
             'bot_response': bot_reply,
@@ -261,8 +272,19 @@ class MindSenseChatbot:
             'context_used': context
         }
 
-    def _get_mode_fallback(self, mode, user_input, detected_intent, detected_emotion):
-        """Provide a supportive, mode-specific empathetic fallback if LLM capacity is unavailable."""
+    def _get_mode_fallback(self, mode, user_input, detected_intent, detected_emotion, user_name='Guest User', user_gender='Prefer not to say'):
+        """Provide a supportive, mode-specific empathetic fallback or direct profile answer if LLM capacity is unavailable."""
+        lower_input = (user_input or '').lower()
+        if detected_intent == 'Profile Query' or any(k in lower_input for k in ['gender', 'my name', 'who am i', 'my profile', 'my account', 'my email', 'whats my', 'what is my']):
+            gender_display = user_gender if user_gender and user_gender.strip() else 'Prefer not to say'
+            name_display = user_name if user_name and user_name.strip() else 'Guest User'
+            if 'gender' in lower_input:
+                return f"According to your profile, your registered gender is {gender_display}."
+            elif 'name' in lower_input or 'who am i' in lower_input:
+                return f"According to your profile, your name is {name_display}."
+            else:
+                return f"According to your profile, your name is {name_display} and your registered gender is {gender_display}."
+
         if mode == 'divorce':
             return (
                 "Going through relationship challenges or divorce can feel emotionally overwhelming and draining. "
@@ -279,15 +301,6 @@ class MindSenseChatbot:
                 "I hear how important this is to you, and I want to support you through it. "
                 "Please take your time, and tell me a bit more about what you're going through."
             )
-
-        return {
-            'bot_response': bot_reply,
-            'mode': mode,
-            'intent': detected_intent,
-            'emotion': detected_emotion,
-            'sentiment': sentiment_analysis,
-            'context_used': context
-        }
 
     def _clean_response(self, raw_reply, max_words):
         """
@@ -323,8 +336,12 @@ class MindSenseChatbot:
 chatbot_instance = MindSenseChatbot()
 
 
-def get_chatbot_response(user_input, mode='mental', history_list=None, iq_level=1, past_bot_responses=None, user_gender='Prefer not to say'):
+def get_chatbot_response(user_input, mode='mental', history_list=None, iq_level=1, past_bot_responses=None, user_gender='Prefer not to say', user_name='Guest User', user_email='guest@mindsense.ai', **kwargs):
+    u_name = kwargs.get('user_name', user_name)
+    u_gender = kwargs.get('user_gender', user_gender)
+    u_email = kwargs.get('user_email', user_email)
     return chatbot_instance.generate_response(
         user_input, mode=mode, history_list=history_list,
-        iq_level=iq_level, past_bot_responses=past_bot_responses, user_gender=user_gender
+        iq_level=iq_level, past_bot_responses=past_bot_responses,
+        user_gender=u_gender, user_name=u_name, user_email=u_email
     )
