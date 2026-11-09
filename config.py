@@ -9,6 +9,8 @@ class Config:
     MONGO_URI = os.getenv("MONGO_URI") or os.getenv("MONGODB_URI") or "mongodb://localhost:27017/mindsense_db?serverSelectionTimeoutMS=5000&connectTimeoutMS=5000"
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
     GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    GROQ_FALLBACK_MODEL = os.getenv("GROQ_FALLBACK_MODEL", "llama-3.1-8b-instant")
+    GROQ_TIMEOUT = int(os.getenv("GROQ_TIMEOUT", "25"))
     
     # Path configuration
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))

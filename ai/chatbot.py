@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import random
 from difflib import SequenceMatcher
 from config import Config
@@ -116,6 +117,8 @@ class MindSenseChatbot:
     def __init__(self):
         self.api_key = Config.GROQ_API_KEY
         self.model_name = Config.GROQ_MODEL
+        self.fallback_model = getattr(Config, 'GROQ_FALLBACK_MODEL', 'llama-3.1-8b-instant')
+        self.request_timeout = getattr(Config, 'GROQ_TIMEOUT', 25)
         self.llm = None
 
         if self.api_key and not self.api_key.startswith("gsk_placeholder"):
@@ -125,10 +128,11 @@ class MindSenseChatbot:
                     groq_api_key=self.api_key,
                     model_name=self.model_name,
                     temperature=0.85,
-                    top_p=0.92,
-                    max_tokens=320
+                    max_tokens=320,
+                    request_timeout=self.request_timeout,
+                    model_kwargs={"top_p": 0.92}
                 )
-                print(f"[ChatGroq] MindSense Production Counselor Engine Initialized — {self.model_name}")
+                print(f"[ChatGroq] MindSense Production Counselor Engine Initialized — {self.model_name} (fallback: {self.fallback_model})")
             except Exception as e:
                 print(f"[ChatGroq Warning] Could not initialize ChatGroq: {e}")
 
@@ -136,12 +140,14 @@ class MindSenseChatbot:
         """
         Generates a context-aware, intent-driven, non-repetitive counseling response.
 
-        Anti-repetition strategy:
+        Anti-repetition & High-Availability strategy:
         1. Tracks past 7 bot responses in memory window.
         2. Compares new response against history with SequenceMatcher (threshold 60%).
-        3. Retries up to 3 times with increasing temperature if too similar.
-        4. Strips blacklisted opening phrases.
-        5. Enforces dynamic word limit at sentence boundaries.
+        3. Cascades through fallback models (70B -> 8B-instant) on rate limit / capacity errors.
+        4. Applies exponential backoff with jitter on 429/503 errors.
+        5. Strips blacklisted opening phrases.
+        6. Enforces dynamic word limit at sentence boundaries.
+        7. Returns warm, mode-specific empathetic fallback if API is unreachable.
         """
         history_list = history_list or []
         past_bot_responses = past_bot_responses or []
@@ -170,11 +176,11 @@ class MindSenseChatbot:
             except Exception:
                 context = ""
 
-        # ── 4. LLM GENERATION WITH ANTI-REPETITION RETRY LOOP ──────────────
+        # ── 4. LLM GENERATION WITH CASCADE & ANTI-REPETITION RETRY LOOP ────
         bot_reply = None
         last_candidate = None  # Track last LLM output even if similarity check fails
 
-        if self.llm and mode != 'iq':
+        if self.api_key and not self.api_key.startswith("gsk_placeholder") and mode != 'iq':
             prompt_template = get_prompt_for_mode(mode)
             base_prompt = {
                 'response_style': random.choice(RESPONSE_STYLES),
@@ -187,25 +193,34 @@ class MindSenseChatbot:
                 'user_input': user_input
             }
 
+            candidate_models = [self.model_name]
+            if self.fallback_model and self.fallback_model not in candidate_models:
+                candidate_models.append(self.fallback_model)
+            if "llama-3.1-8b-instant" not in candidate_models:
+                candidate_models.append("llama-3.1-8b-instant")
+
             max_retries = 3
+
             for attempt in range(max_retries):
+                target_model = candidate_models[min(attempt, len(candidate_models) - 1)]
                 try:
-                    # Format as true [SystemMessage, HumanMessage] sequence
                     messages = prompt_template.format_messages(**base_prompt)
                     
-                    # Increase temperature on each retry to force more diversity
-                    if attempt > 0:
-                        from langchain_groq import ChatGroq
-                        retry_llm = ChatGroq(
-                            groq_api_key=self.api_key,
-                            model_name=self.model_name,
-                            temperature=min(1.0, 0.85 + attempt * 0.08),
-                            top_p=0.95,
-                            max_tokens=320
-                        )
-                        response = retry_llm.invoke(messages)
-                    else:
+                    from langchain_groq import ChatGroq
+                    temp = min(1.0, 0.85 + attempt * 0.05)
+
+                    if attempt == 0 and self.llm and target_model == self.model_name:
                         response = self.llm.invoke(messages)
+                    else:
+                        active_llm = ChatGroq(
+                            groq_api_key=self.api_key,
+                            model_name=target_model,
+                            temperature=temp,
+                            max_tokens=320,
+                            request_timeout=self.request_timeout,
+                            model_kwargs={"top_p": 0.95}
+                        )
+                        response = active_llm.invoke(messages)
 
                     raw_reply = response.content if hasattr(response, 'content') else str(response)
                     last_candidate = self._clean_response(raw_reply, max_words)
@@ -217,15 +232,53 @@ class MindSenseChatbot:
                         print(f"[Anti-Repetition] Attempt {attempt + 1}: too similar, retrying...")
 
                 except Exception as e:
-                    print(f"[LLM Error] Attempt {attempt + 1}: {e}")
+                    err_str = str(e).lower()
+                    print(f"[LLM Error] Attempt {attempt + 1} ({target_model}): {e}")
 
-            # Always prefer the LLM's last output
+                    # Check for rate limits or high-demand / capacity errors
+                    is_rate_limit = any(term in err_str for term in ['429', 'rate_limit', 'capacity', '503', 'resource_exhausted', 'tokens per minute', 'tpm'])
+                    if attempt < max_retries - 1:
+                        backoff_sec = (1.5 ** attempt) + random.uniform(0.2, 0.5)
+                        if is_rate_limit:
+                            next_model = candidate_models[min(attempt + 1, len(candidate_models) - 1)]
+                            print(f"[ChatGroq Backoff] Rate limit or high capacity detected. Backing off {backoff_sec:.2f}s and cascading to {next_model}...")
+                        time.sleep(backoff_sec)
+
+            # Always prefer the LLM's last output if valid
             if not bot_reply and last_candidate:
                 bot_reply = last_candidate
 
-        # ── 5. FALLBACK (Only if LLM completely crashes) ────────
+        # ── 5. EMPATHETIC MODE FALLBACK (If LLM is completely unreachable) ──
         if not bot_reply:
-            bot_reply = "I'm currently experiencing high demand and having a bit of trouble processing right now, but I want to make sure I understand you. Could you share that with me again gently?"
+            bot_reply = self._get_mode_fallback(mode, user_input, detected_intent, detected_emotion)
+
+        return {
+            'bot_response': bot_reply,
+            'mode': mode,
+            'intent': detected_intent,
+            'emotion': detected_emotion,
+            'sentiment': sentiment_analysis,
+            'context_used': context
+        }
+
+    def _get_mode_fallback(self, mode, user_input, detected_intent, detected_emotion):
+        """Provide a supportive, mode-specific empathetic fallback if LLM capacity is unavailable."""
+        if mode == 'divorce':
+            return (
+                "Going through relationship challenges or divorce can feel emotionally overwhelming and draining. "
+                "I am here to support you without judgment. Take a gentle breath, and whenever you're ready, "
+                "tell me what feels heaviest on your mind right now."
+            )
+        elif mode == 'mental':
+            return (
+                "I'm here with you, and what you're experiencing is important. Sometimes taking a pause and a slow breath can help center us. "
+                "Whenever you feel ready, please share what feels most overwhelming or on your mind today."
+            )
+        else:
+            return (
+                "I hear how important this is to you, and I want to support you through it. "
+                "Please take your time, and tell me a bit more about what you're going through."
+            )
 
         return {
             'bot_response': bot_reply,

@@ -1,7 +1,9 @@
 import json
 import random
 import re
+import time
 from config import Config
+from ai.iq_questions import get_fallback_iq_batch
 
 try:
     import json_repair
@@ -11,11 +13,8 @@ except ImportError:
 def _extract_json_array(raw_text):
     """
     Safely extracts and parses a JSON array from a raw LLM response.
-    Unconditionally prints the raw output for debugging.
+    Strips markdown blocks and extracts between first '[' and last ']'.
     """
-    print('=== RAW LLM OUTPUT START ===\n' + raw_text + '\n=== RAW LLM OUTPUT END ===', flush=True)
-    
-    # Strip markdown code blocks if the LLM included them
     cleaned_text = raw_text.replace("```json", "").replace("```", "").strip()
 
     first_bracket = cleaned_text.find('[')
@@ -24,7 +23,7 @@ def _extract_json_array(raw_text):
     if first_bracket != -1 and last_bracket != -1 and last_bracket > first_bracket:
         cleaned_text = cleaned_text[first_bracket:last_bracket+1]
 
-    # Try json_repair first if available
+    # 1. Try json_repair first if available
     if json_repair is not None:
         try:
             parsed = json_repair.loads(cleaned_text)
@@ -33,11 +32,11 @@ def _extract_json_array(raw_text):
         except Exception:
             pass
 
-    # Standard json.loads
+    # 2. Standard json.loads
     try:
         return json.loads(cleaned_text)
     except Exception:
-        # Fallback regex clean: fix trailing commas and newlines inside arrays/objects
+        # Regex clean trailing commas before closing braces
         cleaned_text = re.sub(r',\s*\]', ']', cleaned_text)
         cleaned_text = re.sub(r',\s*\}', '}', cleaned_text)
         try:
@@ -48,100 +47,125 @@ def _extract_json_array(raw_text):
                     return json_repair.loads(cleaned_text)
                 except Exception:
                     pass
-            raise ValueError(f"Failed to parse JSON from LLM output. Error: {final_err}")
+            raise ValueError(f"Failed to parse JSON array from output: {final_err}")
 
 def generate_iq_test_batch():
     """
-    Dynamically generates a full 20-question IQ test in a single LLM call.
-    Questions are strictly scaled: 1-7 Easy, 8-14 Medium, 15-20 Hard.
-    Returns a list of 20 question dictionaries.
+    Dynamically generates a full 20-question IQ test via Groq API.
+    Features:
+    - Multi-model fallback cascade (70B -> 8B-instant -> backup)
+    - Exponential backoff on rate limits / 429 errors
+    - Request timeouts to avoid hanging on slow network
+    - Seamless fallback to authentic psychometric question bank if all API calls fail
     """
     api_key = Config.GROQ_API_KEY
-    model_name = Config.GROQ_MODEL
-    
     if not api_key or api_key.startswith("gsk_placeholder"):
-        raise Exception("Invalid or missing Groq API Key.")
+        print("[IQ Generator] No valid Groq API key found. Using balanced question bank fallback.")
+        return get_fallback_iq_batch()
+
+    # Model priority cascade: Try configured primary (70b), fallback to ultra-fast 8b-instant
+    primary_model = Config.GROQ_MODEL
+    fallback_model = getattr(Config, 'GROQ_FALLBACK_MODEL', 'llama-3.1-8b-instant')
+    models_to_try = [primary_model]
+    if fallback_model not in models_to_try:
+        models_to_try.append(fallback_model)
+    if "llama-3.1-8b-instant" not in models_to_try:
+        models_to_try.append("llama-3.1-8b-instant")
+
+    timeout_sec = getattr(Config, 'GROQ_TIMEOUT', 25)
 
     try:
         from langchain_groq import ChatGroq
         from langchain_core.prompts import ChatPromptTemplate
-        
-        llm = ChatGroq(
-            groq_api_key=api_key,
-            model_name=model_name,
-            temperature=0.8,
-            max_tokens=4000
-        )
-        
+
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are an expert psychometrician designing an adaptive IQ test. Your task is to generate exactly 20 unique, challenging psychometric IQ questions in a single JSON array."),
+            ("system", "You are an expert psychometrician. Output exactly 20 unique psychometric questions in a strict JSON array. No markdown, no explanations outside JSON."),
             ("human", """
-Generate a JSON array of exactly 20 IQ questions.
+Generate a JSON array of exactly 20 unique IQ test questions:
+- Questions 1 to 7: EASY (Number series, simple analogies)
+- Questions 8 to 14: MEDIUM (Pattern logic, 2-step sequences, deduction)
+- Questions 15 to 20: HARD (Abstract logic, spatial math, complex series)
 
-Ensure the questions span diverse categories:
-- Numerical Reasoning (Number sequences, math logic)
-- Alphabet/Verbal Reasoning (Letter coding, analogies)
-- Logical/Pattern Recognition (Syllogisms, deductive logic)
-- Spatial Deduction (Mental rotation, visual logic)
-
-CRITICAL DIFFICULTY SCALING:
-- Questions 1 to 7 must be EASY (straightforward, single-step).
-- Questions 8 to 14 must be MEDIUM (multi-step, requires some thought).
-- Questions 15 to 20 must be HARD (complex, abstract, highly challenging).
-
-INSTRUCTIONS:
-- Ensure all questions are solvable purely through logic, math, or pattern recognition (no trivia).
-- Generate completely UNIQUE questions. Do NOT use clichés (avoid 'If Mary has 3 apples', 'bat and ball cost $1.10', etc).
-- Make sure exactly one of the 4 options is unambiguously correct.
-- Provide a brief, logical explanation for the correct answer.
-
-Return ONLY a valid JSON array of objects with this exact structure, nothing else:
+Each object must follow this exact JSON structure:
 [
   {{
     "category": "Numerical Reasoning",
-    "question": "The question text here",
-    "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
-    "answer": "The exact text of the correct option",
-    "explanation": "Brief logical explanation for why this is the answer"
-  }},
-  ... (19 more objects)
+    "question": "Clear question text",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "answer": "Exact text of the correct option",
+    "explanation": "Concise logical rationale"
+  }}
 ]
 """)
         ])
-        
+
+        messages = prompt.format_messages()
         data = None
-        for attempt in range(3):
-            try:
-                response = llm.invoke(prompt.format_messages())
-                raw_output = response.content if hasattr(response, 'content') else str(response)
-                
-                data = _extract_json_array(raw_output)
-                if isinstance(data, list) and len(data) >= 5: # accept partial if retries are failing, we'll pad it
-                    break
-            except Exception as e:
-                print(f"[IQ Generator Retry {attempt+1}/3 Failed] {e}")
-                if attempt == 2:
-                    raise e
-                    
-        if not data or not isinstance(data, list):
-            raise ValueError("LLM returned valid JSON, but it is not a list/array.")
 
-        # Ensure we return exactly 20 questions, properly formatted
-        formatted_questions = []
-        for idx, q in enumerate(data[:20]):
-            difficulty = 'easy' if idx < 7 else ('medium' if idx < 14 else 'hard')
-            formatted_questions.append({
-                'id': f"q_{random.randint(10000, 99999)}",
-                'difficulty': difficulty,
-                'category': q.get('category', 'Logical Reasoning'),
-                'question': q.get('question', 'Error parsing question.'),
-                'options': q.get('options', ['A', 'B', 'C', 'D']),
-                'answer': q.get('answer', 'A'),
-                'explanation': q.get('explanation', 'No explanation provided.')
-            })
-            
-        return formatted_questions
+        for model_idx, model_name in enumerate(models_to_try):
+            print(f"[IQ Generator] Attempting batch generation with model: {model_name}")
+            max_attempts = 2
 
-    except Exception as e:
-        print(f"[IQ Generator Batch Error] {e}")
-        raise Exception(f"Failed to generate dynamic test: {e}")
+            for attempt in range(max_attempts):
+                try:
+                    llm = ChatGroq(
+                        groq_api_key=api_key,
+                        model_name=model_name,
+                        temperature=0.7,
+                        max_tokens=3000,
+                        request_timeout=timeout_sec
+                    )
+
+                    response = llm.invoke(messages)
+                    raw_output = response.content if hasattr(response, 'content') else str(response)
+
+                    parsed_list = _extract_json_array(raw_output)
+                    if isinstance(parsed_list, list) and len(parsed_list) >= 5:
+                        data = parsed_list
+                        print(f"[IQ Generator] Successfully parsed {len(data)} questions using {model_name}!")
+                        break
+
+                except Exception as call_err:
+                    err_str = str(call_err).lower()
+                    print(f"[IQ Generator Retry {attempt+1}/{max_attempts} on {model_name}] Warning: {call_err}")
+
+                    # If rate limit (429) or high demand (503), apply exponential backoff
+                    if "rate limit" in err_str or "429" in err_str or "high demand" in err_str or "capacity" in err_str:
+                        backoff = (2.0 ** attempt) + random.uniform(0.3, 0.7)
+                        print(f"[IQ Generator] Rate limit detected. Backing off for {backoff:.2f}s...")
+                        time.sleep(backoff)
+                    else:
+                        time.sleep(0.5)
+
+            if data is not None:
+                break
+
+        # If LLM generation succeeded with valid list
+        if data and isinstance(data, list) and len(data) >= 5:
+            formatted_questions = []
+            for idx, q in enumerate(data[:20]):
+                difficulty = 'easy' if idx < 7 else ('medium' if idx < 14 else 'hard')
+                formatted_questions.append({
+                    'id': f"ai_{difficulty}_{random.randint(10000, 99999)}",
+                    'difficulty': difficulty,
+                    'category': q.get('category', 'Logical Reasoning'),
+                    'question': q.get('question', 'Identify the next logical term in this pattern.'),
+                    'options': q.get('options', ['A', 'B', 'C', 'D']),
+                    'answer': q.get('answer', 'A'),
+                    'explanation': q.get('explanation', 'Logical analysis of the given sequence.')
+                })
+
+            # If fewer than 20 returned by LLM, pad remaining with bank questions
+            if len(formatted_questions) < 20:
+                needed = 20 - len(formatted_questions)
+                pad_pool = get_fallback_iq_batch()
+                formatted_questions.extend(pad_pool[:needed])
+
+            return formatted_questions
+
+    except Exception as outer_err:
+        print(f"[IQ Generator Error] Unexpected generation failure: {outer_err}")
+
+    # Seamless fallback: Guarantee a functioning test regardless of API conditions
+    print("[IQ Generator] Serving randomized 20-question psychometric bank fallback.")
+    return get_fallback_iq_batch()

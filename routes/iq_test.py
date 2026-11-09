@@ -24,7 +24,8 @@ def start_iq_test():
         # Batch generate all 20 questions dynamically
         questions_batch = generate_iq_test_batch()
         if not questions_batch or len(questions_batch) == 0:
-            return jsonify({'success': False, 'error': 'AI failed to generate a valid test.'}), 500
+            from ai.iq_questions import get_fallback_iq_batch
+            questions_batch = get_fallback_iq_batch()
 
         IQ_TEST_SESSIONS[session_id] = {
             'session_id': session_id,
@@ -55,8 +56,35 @@ def start_iq_test():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        err_msg = "The AI assessment engine is currently busy or experiencing high traffic. Please try again in a few moments."
-        return jsonify({'success': False, 'error': err_msg, 'details': str(e)}), 500
+        try:
+            from ai.iq_questions import get_fallback_iq_batch
+            fallback_batch = get_fallback_iq_batch()
+            IQ_TEST_SESSIONS[session_id] = {
+                'session_id': session_id,
+                'user_email': user_email,
+                'questions': fallback_batch,
+                'question_index': 1,
+                'total_questions': len(fallback_batch),
+                'correct_count': 0,
+                'responses': [],
+                'start_time': datetime.now()
+            }
+            question = fallback_batch[0]
+            IQ_TEST_SESSIONS[session_id]['current_question'] = question
+            return jsonify({
+                'success': True,
+                'session_id': session_id,
+                'question_index': 1,
+                'total_questions': len(fallback_batch),
+                'difficulty': question['difficulty'].capitalize(),
+                'category': question['category'],
+                'question': question['question'],
+                'options': question['options'],
+                'time_limit': 30
+            })
+        except Exception:
+            err_msg = "The AI assessment engine is currently busy or experiencing high traffic. Please try again in a few moments."
+            return jsonify({'success': False, 'error': err_msg, 'details': str(e)}), 500
 
 @iq_bp.route('/api/iq/next', methods=['POST'])
 def next_iq_question():
